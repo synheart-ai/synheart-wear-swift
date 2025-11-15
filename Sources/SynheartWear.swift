@@ -52,11 +52,33 @@ public class SynheartWear {
         try ensureInitialized()
 
         let healthKitTypes = permissions.compactMap { $0.toHealthKitType() }
+        let readTypes = Set(healthKitTypes)
 
-        try await healthStore.requestAuthorization(
-            toShare: Set(),
-            read: Set(healthKitTypes)
-        )
+        if #available(iOS 15.0, *) {
+            try await healthStore.requestAuthorization(
+                toShare: Set<HKSampleType>(),
+                read: readTypes
+            )
+        } else {
+            try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+                healthStore.requestAuthorization(
+                    toShare: Set<HKSampleType>(),
+                    read: readTypes
+                ) { success, error in
+                    if let error = error {
+                        continuation.resume(throwing: error)
+                        return
+                    }
+
+                    guard success else {
+                        continuation.resume(throwing: SynheartWearError.permissionDenied)
+                        return
+                    }
+
+                    continuation.resume()
+                }
+            }
+        }
 
         var results: [PermissionType: Bool] = [:]
         for permission in permissions {
@@ -126,26 +148,10 @@ public class SynheartWear {
     /// - Parameter interval: Polling interval in seconds
     /// - Returns: Publisher of WearMetrics with updated HR data
     public func streamHR(interval: TimeInterval = 3.0) -> AnyPublisher<WearMetrics, Error> {
-        Timer.publish(every: interval, on: .main, in: .common)
+        let timerPublisher = Timer.publish(every: interval, on: .main, in: .common)
             .autoconnect()
-            .flatMap { [weak self] _ -> AnyPublisher<WearMetrics, Error> in
-                guard let self = self else {
-                    return Fail(error: SynheartWearError.notInitialized)
-                        .eraseToAnyPublisher()
-                }
-                return Future { promise in
-                    Task {
-                        do {
-                            let metrics = try await self.readMetrics(isRealTime: true)
-                            promise(.success(metrics))
-                        } catch {
-                            promise(.failure(error))
-                        }
-                    }
-                }
-                .eraseToAnyPublisher()
-            }
-            .eraseToAnyPublisher()
+        
+        return createMetricsPublisher(from: timerPublisher)
     }
 
     /// Stream HRV data in configurable windows
@@ -153,26 +159,10 @@ public class SynheartWear {
     /// - Parameter window: Window size in seconds for HRV calculation
     /// - Returns: Publisher of WearMetrics with updated HRV data
     public func streamHRV(window: TimeInterval = 5.0) -> AnyPublisher<WearMetrics, Error> {
-        Timer.publish(every: window, on: .main, in: .common)
+        let timerPublisher = Timer.publish(every: window, on: .main, in: .common)
             .autoconnect()
-            .flatMap { [weak self] _ -> AnyPublisher<WearMetrics, Error> in
-                guard let self = self else {
-                    return Fail(error: SynheartWearError.notInitialized)
-                        .eraseToAnyPublisher()
-                }
-                return Future { promise in
-                    Task {
-                        do {
-                            let metrics = try await self.readMetrics(isRealTime: true)
-                            promise(.success(metrics))
-                        } catch {
-                            promise(.failure(error))
-                        }
-                    }
-                }
-                .eraseToAnyPublisher()
-            }
-            .eraseToAnyPublisher()
+        
+        return createMetricsPublisher(from: timerPublisher)
     }
 
     /// Stream HR data using AsyncStream (modern Swift concurrency)
@@ -241,6 +231,51 @@ public class SynheartWear {
     }
 
     // MARK: - Private Methods
+
+    private func createMetricsPublisher(from publisher: Publishers.Autoconnect<Timer.TimerPublisher>) -> AnyPublisher<WearMetrics, Error> {
+        if #available(iOS 14.0, *) {
+            return createMetricsPublisherModern(from: publisher)
+        } else {
+            return createMetricsPublisherLegacy(from: publisher)
+        }
+    }
+
+    private func makeMetricsTransform() -> (Date) -> AnyPublisher<WearMetrics, Error> {
+        { [weak self] _ in
+            guard let self = self else {
+                return Fail(error: SynheartWearError.notInitialized)
+                    .eraseToAnyPublisher()
+            }
+            return Future { promise in
+                Task {
+                    do {
+                        let metrics = try await self.readMetrics(isRealTime: true)
+                        promise(.success(metrics))
+                    } catch {
+                        promise(.failure(error))
+                    }
+                }
+            }
+            .eraseToAnyPublisher()
+        }
+    }
+
+    @available(iOS 14.0, *)
+    private func createMetricsPublisherModern(from publisher: Publishers.Autoconnect<Timer.TimerPublisher>) -> AnyPublisher<WearMetrics, Error> {
+        let transform = makeMetricsTransform()
+        return publisher
+            .flatMap(maxPublishers: .unlimited, transform)
+            .eraseToAnyPublisher()
+    }
+
+    private func createMetricsPublisherLegacy(from publisher: Publishers.Autoconnect<Timer.TimerPublisher>) -> AnyPublisher<WearMetrics, Error> {
+        let transform = makeMetricsTransform()
+        return publisher
+            .setFailureType(to: Error.self)
+            .map(transform)
+            .switchToLatest()
+            .eraseToAnyPublisher()
+    }
 
     private func ensureInitialized() throws {
         guard initialized else {
