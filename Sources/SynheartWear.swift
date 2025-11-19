@@ -142,39 +142,128 @@ public class SynheartWear {
 
     /// Read current biometric metrics
     ///
+    /// Reads metrics from all available sources (HealthKit and connected cloud providers)
+    /// and merges them into a unified WearMetrics object.
+    ///
     /// - Parameter isRealTime: Whether to read real-time data or historical snapshot
-    /// - Returns: Unified WearMetrics containing all available biometric data
+    /// - Returns: Unified WearMetrics containing all available biometric data from all sources
     /// - Throws: SynheartWearError if metrics cannot be read
     public func readMetrics(isRealTime: Bool = false) async throws -> WearMetrics {
         try ensureInitialized()
 
-        // Read heart rate
-        let heartRate = try await readHeartRate(isRealTime: isRealTime)
+        var allMetrics: [WearMetrics] = []
 
-        // Read steps
-        let steps = try await readSteps()
+        // Read from HealthKit if enabled
+        if config.enabledAdapters.contains(.appleHealthKit) {
+            do {
+                let heartRate = try await readHeartRate(isRealTime: isRealTime)
+                let steps = try await readSteps()
 
-        // Build metrics
-        let metrics = WearMetrics(
-            timestamp: Date(),
-            deviceId: "applewatch_\(UUID().uuidString.prefix(8))",
-            source: "apple_healthkit",
-            metrics: [
-                "hr": heartRate,
-                "steps": steps
-            ],
-            meta: [
-                "synced": "true"
-            ],
-            rrIntervals: nil
-        )
+                let healthKitMetrics = WearMetrics(
+                    timestamp: Date(),
+                    deviceId: "applewatch_\(UUID().uuidString.prefix(8))",
+                    source: "apple_healthkit",
+                    metrics: [
+                        "hr": heartRate,
+                        "steps": steps
+                    ],
+                    meta: [
+                        "synced": "true"
+                    ],
+                    rrIntervals: nil
+                )
+                allMetrics.append(healthKitMetrics)
+            } catch {
+                // Log but don't fail - continue with other sources
+                print("Warning: Failed to read HealthKit metrics: \(error)")
+            }
+        }
+
+        // Read from WHOOP if connected
+        if config.enabledAdapters.contains(.whoop),
+           let whoopProvider = whoopProvider,
+           whoopProvider.isConnected() {
+            do {
+                // Fetch latest recovery data (most recent record)
+                let recoveryData = try await whoopProvider.fetchRecovery(
+                    start: Date().addingTimeInterval(-24 * 60 * 60), // Last 24 hours
+                    end: Date(),
+                    limit: 1
+                )
+                
+                if let latestRecovery = recoveryData.first {
+                    allMetrics.append(latestRecovery)
+                }
+            } catch {
+                // Log but don't fail - continue with other sources
+                print("Warning: Failed to read WHOOP metrics: \(error)")
+            }
+        }
+
+        // Merge all metrics from different sources
+        let mergedMetrics: WearMetrics
+        if allMetrics.isEmpty {
+            // No data available from any source
+            mergedMetrics = WearMetrics(
+                timestamp: Date(),
+                deviceId: "unknown",
+                source: "none",
+                metrics: [:],
+                meta: ["error": "No data sources available"],
+                rrIntervals: nil
+            )
+        } else if allMetrics.count == 1 {
+            // Only one source available
+            mergedMetrics = allMetrics[0]
+        } else {
+            // Multiple sources - merge them
+            mergedMetrics = normalizer.mergeSnapshots(allMetrics)
+        }
 
         // Cache if enabled
         if config.enableLocalCaching {
-            try await localCache.storeSession(metrics)
+            try await localCache.storeSession(mergedMetrics)
         }
 
-        return metrics
+        return mergedMetrics
+    }
+    
+    /// Read metrics from a specific provider
+    ///
+    /// Fetches data from a specific wearable provider (e.g., WHOOP) without merging
+    /// with other sources. Useful for provider-specific data or historical queries.
+    ///
+    /// - Parameters:
+    ///   - adapter: Device adapter type (e.g., .whoop)
+    ///   - start: Start date for data range (optional)
+    ///   - end: End date for data range (optional)
+    ///   - limit: Maximum number of records (optional)
+    /// - Returns: Array of WearMetrics from the specified provider
+    /// - Throws: SynheartWearError if provider is not configured or fetch fails
+    public func readMetricsFromProvider(
+        _ adapter: DeviceAdapter,
+        start: Date? = nil,
+        end: Date? = nil,
+        limit: Int? = nil
+    ) async throws -> [WearMetrics] {
+        try ensureInitialized()
+        
+        switch adapter {
+        case .whoop:
+            guard let whoopProvider = whoopProvider else {
+                throw SynheartWearError.apiError("WHOOP provider not configured. Please provide appId in SynheartWearConfig.")
+            }
+            guard whoopProvider.isConnected() else {
+                throw SynheartWearError.notConnected
+            }
+            return try await whoopProvider.fetchRecovery(start: start, end: end, limit: limit)
+        case .appleHealthKit:
+            // For HealthKit, return current metrics
+            let metrics = try await readMetrics()
+            return [metrics]
+        case .fitbit, .garmin:
+            throw SynheartWearError.apiError("Provider for \(adapter) not yet implemented.")
+        }
     }
 
     /// Stream real-time heart rate data

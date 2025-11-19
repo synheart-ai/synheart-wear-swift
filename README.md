@@ -126,17 +126,41 @@ Task {
 
 ### 4. Read Metrics
 
+**Unified metrics from all sources:**
 ```swift
 Task {
     do {
+        // Automatically merges data from HealthKit + WHOOP (if connected)
         let metrics = try await synheartWear.readMetrics()
 
         print("Heart Rate: \(metrics.getMetric(.hr) ?? 0) bpm")
         print("HRV RMSSD: \(metrics.getMetric(.hrvRmssd) ?? 0) ms")
         print("Steps: \(metrics.getMetric(.steps) ?? 0)")
-        print("Calories: \(metrics.getMetric(.calories) ?? 0)")
+        print("Recovery Score: \(metrics.metrics["recovery_score"] ?? 0)")
+        print("Source: \(metrics.source)") // e.g., "merged_apple_healthkit" or "whoop_recovery"
     } catch {
         print("Failed to read metrics: \(error)")
+    }
+}
+```
+
+**Provider-specific metrics:**
+```swift
+Task {
+    do {
+        // Fetch historical data from WHOOP
+        let whoopData = try await synheartWear.readMetricsFromProvider(
+            .whoop,
+            start: Date().addingTimeInterval(-7 * 24 * 60 * 60), // Last 7 days
+            end: Date(),
+            limit: 25
+        )
+        
+        for record in whoopData {
+            print("Recovery: \(record.metrics["recovery_score"] ?? 0)")
+        }
+    } catch {
+        print("Failed to read WHOOP data: \(error)")
     }
 }
 ```
