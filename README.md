@@ -91,7 +91,7 @@ let config = SynheartWearConfig(
     enableLocalCaching: true,
     enableEncryption: true,
     streamInterval: 3.0,
-    baseUrl: URL(string: "https://api.wear.synheart.io")!, // Optional: defaults to production
+    baseUrl: URL(string: "https://synheart-wear-service-leatest.onrender.com")!, // Optional: defaults to production
     appId: "your-app-id", // Required for WHOOP
     redirectUri: "synheart://oauth/callback" // Optional: defaults to synheart://oauth/callback
 )
@@ -436,7 +436,7 @@ import SynheartWear
 let config = SynheartWearConfig(
     enabledAdapters: [.whoop],
     appId: "your-app-id",
-    baseUrl: URL(string: "https://api.wear.synheart.io")!,
+    baseUrl: URL(string: "https://synheart-wear-service-leatest.onrender.com")!,
     redirectUri: "synheart://oauth/callback"
 )
 
@@ -453,7 +453,7 @@ import SynheartWear
 // Initialize WHOOP provider directly
 let whoopProvider = WhoopProvider(
     appId: "your-app-id",
-    baseUrl: URL(string: "https://api.wear.synheart.io")!,
+    baseUrl: URL(string: "https://synheart-wear-service-leatest.onrender.com")!,
     redirectUri: "synheart://oauth/callback"
 )
 

@@ -50,7 +50,7 @@ public class WhoopProvider: WearableProvider {
         redirectUri: String = "synheart://oauth/callback"
     ) {
         self.appId = appId
-        self.baseUrl = baseUrl ?? URL(string: "https://api.wear.synheart.io")!
+        self.baseUrl = baseUrl ?? URL(string: "https://synheart-wear-service-leatest.onrender.com")!
         self.redirectUri = redirectUri
         self.api = WearServiceAPI(baseURL: self.baseUrl)
         self.keychainService = "com.synheart.wear.whoop"

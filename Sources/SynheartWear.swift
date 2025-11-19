@@ -29,7 +29,7 @@ public class SynheartWear {
         
         // Initialize providers if configuration is provided
         if let appId = config.appId {
-            let baseUrl = config.baseUrl ?? URL(string: "https://api.wear.synheart.io")!
+            let baseUrl = config.baseUrl ?? URL(string: "https://synheart-wear-service-leatest.onrender.com")!
             let redirectUri = config.redirectUri ?? "synheart://oauth/callback"
             
             if config.enabledAdapters.contains(.whoop) {
