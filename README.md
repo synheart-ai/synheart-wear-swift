@@ -10,12 +10,14 @@
 ## 🚀 Features
 
 - **📱 HealthKit Integration**: Native iOS biometric data access from Apple Watch
-- **⌚ Multi-Device Support**: Apple Watch, Fitbit, Garmin, Whoop (via HealthKit sync)
+- **⌚ Multi-Device Support**: Apple Watch, Fitbit, Garmin, Whoop (via HealthKit sync and cloud APIs)
+- **☁️ Cloud Integration**: Direct API access to WHOOP via Wear Service
 - **🔄 Real-Time Streaming**: Live HR and HRV data streams with Combine framework
 - **📊 Unified Schema**: Consistent data format across all devices
 - **🔒 Privacy-First**: Consent-based data access with encryption
 - **💾 Local Storage**: Encrypted offline data persistence with Keychain
 - **⚡ Swift Concurrency**: Modern async/await API
+- **🔐 OAuth Support**: Secure OAuth 2.0 flow for cloud-based providers
 
 ## 📦 Installation
 
@@ -68,6 +70,7 @@ Add HealthKit capability in Xcode:
 
 ### 2. Initialize the SDK
 
+**For HealthKit only:**
 ```swift
 import SynheartWear
 
@@ -76,6 +79,23 @@ let config = SynheartWearConfig(
     enableLocalCaching: true,
     enableEncryption: true,
     streamInterval: 3.0 // 3 seconds
+)
+
+let synheartWear = SynheartWear(config: config)
+```
+
+**For WHOOP integration:**
+```swift
+import SynheartWear
+
+let config = SynheartWearConfig(
+    enabledAdapters: [.appleHealthKit, .whoop],
+    enableLocalCaching: true,
+    enableEncryption: true,
+    streamInterval: 3.0,
+    baseUrl: URL(string: "https://synheart-wear-service-leatest.onrender.com")!, // Optional: defaults to production
+    appId: "your-app-id", // Required for WHOOP
+    redirectUri: "synheart://oauth/callback" // Optional: defaults to synheart://oauth/callback
 )
 
 let synheartWear = SynheartWear(config: config)
@@ -108,17 +128,41 @@ Task {
 
 ### 4. Read Metrics
 
+**Unified metrics from all sources:**
 ```swift
 Task {
     do {
+        // Automatically merges data from HealthKit + WHOOP (if connected)
         let metrics = try await synheartWear.readMetrics()
 
         print("Heart Rate: \(metrics.getMetric(.hr) ?? 0) bpm")
         print("HRV RMSSD: \(metrics.getMetric(.hrvRmssd) ?? 0) ms")
         print("Steps: \(metrics.getMetric(.steps) ?? 0)")
-        print("Calories: \(metrics.getMetric(.calories) ?? 0)")
+        print("Recovery Score: \(metrics.metrics["recovery_score"] ?? 0)")
+        print("Source: \(metrics.source)") // e.g., "merged_apple_healthkit" or "whoop_recovery"
     } catch {
         print("Failed to read metrics: \(error)")
+    }
+}
+```
+
+**Provider-specific metrics:**
+```swift
+Task {
+    do {
+        // Fetch historical data from WHOOP
+        let whoopData = try await synheartWear.readMetricsFromProvider(
+            .whoop,
+            start: Date().addingTimeInterval(-7 * 24 * 60 * 60), // Last 7 days
+            end: Date(),
+            limit: 25
+        )
+        
+        for record in whoopData {
+            print("Recovery: \(record.metrics["recovery_score"] ?? 0)")
+        }
+    } catch {
+        print("Failed to read WHOOP data: \(error)")
     }
 }
 ```
@@ -254,7 +298,7 @@ try await synheartWear.clearOldCache(maxAge: 30 * 24 * 60 * 60)
 | Apple Watch | iOS | HealthKit | ✅ Ready |
 | Fitbit | iOS | HealthKit Sync | ✅ Ready |
 | Garmin | iOS | HealthKit Sync | 🔄 In Development |
-| Whoop | iOS | REST API | 📋 Planned |
+| Whoop | iOS | REST API | ✅ Ready |
 | Oura Ring | iOS | HealthKit Sync | ✅ Ready |
 
 ## 🔒 Privacy & Security
@@ -295,6 +339,247 @@ swift test --enable-code-coverage
 # Build for iOS
 swift build -c release
 ```
+
+## 🔗 WHOOP Integration
+
+### Setup Deep Link Handling
+
+The WHOOP provider uses OAuth flow which requires deep link handling in your app.
+
+#### 1. Configure URL Scheme in Info.plist
+
+Add to your `Info.plist`:
+
+```xml
+<key>CFBundleURLTypes</key>
+<array>
+    <dict>
+        <key>CFBundleURLSchemes</key>
+        <array>
+            <string>synheart</string>
+        </array>
+        <key>CFBundleURLName</key>
+        <string>com.yourcompany.synheart</string>
+    </dict>
+</array>
+```
+
+#### 2. Handle Deep Links
+
+**For SwiftUI apps:**
+
+```swift
+import SwiftUI
+
+@main
+struct MyApp: App {
+    var body: some Scene {
+        WindowGroup {
+            ContentView()
+                .onOpenURL { url in
+                    handleDeepLink(url)
+                }
+        }
+    }
+    
+    func handleDeepLink(_ url: URL) {
+        if url.scheme == "synheart" && url.host == "oauth" && url.path == "/callback" {
+            let components = URLComponents(url: url, resolvingAgainstBaseURL: false)
+            let code = components?.queryItems?.first(where: { $0.name == "code" })?.value
+            let state = components?.queryItems?.first(where: { $0.name == "state" })?.value
+            
+            if let code = code, let state = state {
+                // Pass to your provider instance
+                Task {
+                    try? await whoopProvider.connectWithCode(
+                        code: code,
+                        state: state,
+                        redirectUri: url.absoluteString
+                    )
+                }
+            }
+        }
+    }
+}
+```
+
+**For UIKit apps:**
+
+```swift
+// In your AppDelegate or SceneDelegate
+func application(_ app: UIApplication, open url: URL, options: [UIApplication.OpenURLOptionsKey : Any] = [:]) -> Bool {
+    if url.scheme == "synheart" && url.host == "oauth" && url.path == "/callback" {
+        let components = URLComponents(url: url, resolvingAgainstBaseURL: false)
+        let code = components?.queryItems?.first(where: { $0.name == "code" })?.value
+        let state = components?.queryItems?.first(where: { $0.name == "state" })?.value
+        
+        if let code = code, let state = state {
+            Task {
+                try? await whoopProvider.connectWithCode(
+                    code: code,
+                    state: state,
+                    redirectUri: url.absoluteString
+                )
+            }
+        }
+        return true
+    }
+    return false
+}
+```
+
+#### 3. Connect to WHOOP
+
+**Option 1: Using SynheartWear SDK (Recommended)**
+```swift
+import SynheartWear
+
+// Configure SDK with WHOOP support
+let config = SynheartWearConfig(
+    enabledAdapters: [.whoop],
+    appId: "your-app-id",
+    baseUrl: URL(string: "https://synheart-wear-service-leatest.onrender.com")!,
+    redirectUri: "synheart://oauth/callback"
+)
+
+let synheartWear = SynheartWear(config: config)
+
+// Get WHOOP provider
+let whoopProvider = try synheartWear.getProvider(.whoop) as! WhoopProvider
+```
+
+**Option 2: Direct provider initialization**
+```swift
+import SynheartWear
+
+// Initialize WHOOP provider directly
+let whoopProvider = WhoopProvider(
+    appId: "your-app-id",
+    baseUrl: URL(string: "https://synheart-wear-service-leatest.onrender.com")!,
+    redirectUri: "synheart://oauth/callback"
+)
+
+// Start OAuth flow
+Task {
+    do {
+        try await whoopProvider.connect()
+        // Browser will open for user authorization
+        // After user approves, deep link will be handled automatically
+    } catch {
+        print("Connection failed: \(error)")
+    }
+}
+
+// Check connection status
+if whoopProvider.isConnected() {
+    let userId = whoopProvider.getUserId()
+    print("Connected as user: \(userId ?? "unknown")")
+}
+
+// Disconnect
+Task {
+    try? await whoopProvider.disconnect()
+}
+
+// Fetch data (with automatic token refresh)
+Task {
+    do {
+        let recovery = try await whoopProvider.fetchRecovery(
+            start: Date().addingTimeInterval(-7 * 24 * 60 * 60), // Last 7 days
+            end: Date(),
+            limit: 25
+        )
+        
+        for record in recovery {
+            print("Recovery: \(record.metrics)")
+        }
+    } catch SynheartWearError.tokenExpired {
+        // Token expired and refresh failed - user needs to reconnect
+        print("Session expired. Please reconnect your WHOOP account.")
+        try? await whoopProvider.connect()
+    } catch {
+        print("Error fetching data: \(error)")
+    }
+}
+```
+
+### Token Refresh
+
+The Wear Service automatically handles token refresh in the background. If a token expires:
+
+1. **Automatic Refresh**: The Wear Service will attempt to refresh the token automatically
+2. **If Refresh Fails**: The SDK will throw a `.tokenExpired` error
+3. **Reconnection Required**: The user must call `connect()` again to re-authenticate
+
+```swift
+// Handle token expiration
+do {
+    let data = try await whoopProvider.fetchRecovery()
+    // Use data...
+} catch SynheartWearError.tokenExpired {
+    // Token expired - reconnect
+    try await whoopProvider.connect()
+}
+```
+
+### Error Handling
+
+The SDK provides comprehensive error handling for various scenarios:
+
+```swift
+do {
+    let data = try await whoopProvider.fetchRecovery()
+} catch SynheartWearError.notConnected {
+    // User hasn't connected their account
+    print("Please connect your WHOOP account first")
+} catch SynheartWearError.tokenExpired {
+    // Token expired - reconnect
+    print("Session expired. Please reconnect.")
+    try await whoopProvider.connect()
+} catch SynheartWearError.authenticationFailed {
+    // Authentication failed
+    print("Authentication failed. Please try again.")
+} catch SynheartWearError.rateLimitExceeded {
+    // Too many requests
+    print("Rate limit exceeded. Please try again later.")
+} catch SynheartWearError.noConnection {
+    // No internet connection
+    print("No internet connection. Please check your network.")
+} catch SynheartWearError.timeout {
+    // Request timed out
+    print("Request timed out. Please try again.")
+} catch SynheartWearError.serverError(let code, let message) {
+    // Server error
+    print("Server error (\(code)): \(message ?? "Unknown error")")
+} catch {
+    // Other errors
+    print("Error: \(error)")
+}
+```
+
+**Graceful Disconnection**: The `disconnect()` method always clears local state, even if the server call fails (e.g., offline):
+
+```swift
+// Disconnect always succeeds locally, even if offline
+try await whoopProvider.disconnect()
+// Local state is cleared, connection is removed
+```
+
+### Custom Redirect URI
+
+You can use a custom redirect URI:
+
+```swift
+let whoopProvider = WhoopProvider(
+    appId: "your-app-id",
+    redirectUri: "myapp://oauth/callback" // Custom deep link
+)
+```
+
+**Important**: The redirect URI must:
+- Match the scheme configured in your `Info.plist`
+- Match the redirect URI configured in the Wear Service integration
+- Be registered with WHOOP in their developer portal
 
 ## 📱 SwiftUI Example
 
@@ -366,8 +651,143 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - **Android SDK**: [synheart-wear-android](https://github.com/synheart-ai/synheart-wear-android)
 - **CLI Tool**: [synheart-wear-cli](https://github.com/synheart-ai/synheart-wear-cli)
 - **Cloud Service**: [synheart-wear-service](https://github.com/synheart-ai/synheart-wear-service)
+- **API Documentation**: [Swagger UI](https://synheart-wear-service-leatest.onrender.com/swagger/index.html)
 - **Synheart AI**: [synheart.ai](https://synheart.ai)
 - **Issues**: [GitHub Issues](https://github.com/synheart-ai/synheart-wear-ios/issues)
+
+## 🔧 Troubleshooting
+
+### Common Issues
+
+#### OAuth Flow Issues
+
+**Problem**: Deep link not opening app after OAuth approval
+- **Solution**: 
+  - Verify `Info.plist` has correct URL scheme configuration
+  - Ensure redirect URI matches exactly (case-sensitive)
+  - Check that redirect URI is registered with WHOOP developer portal
+  - Verify app is installed and URL scheme is unique
+
+**Problem**: "Authentication failed" error during `connectWithCode()`
+- **Solution**:
+  - State parameter mismatch - ensure you're using the same state from `connect()`
+  - OAuth flow may have expired - restart the flow by calling `connect()` again
+  - Check that code hasn't expired (OAuth codes expire quickly)
+
+**Problem**: Browser doesn't open when calling `connect()`
+- **Solution**:
+  - Check network connection
+  - Verify `appId` is correct
+  - Check that base URL is accessible
+  - Ensure app has proper permissions
+
+#### Data Fetching Issues
+
+**Problem**: "Not connected" error when fetching data
+- **Solution**:
+  - Verify `isConnected()` returns `true`
+  - Check that OAuth flow completed successfully
+  - Ensure `user_id` is stored (check Keychain)
+  - Try disconnecting and reconnecting
+
+**Problem**: "Token expired" error
+- **Solution**:
+  - Token refresh failed - user needs to reconnect
+  - Call `connect()` again to re-authenticate
+  - The Wear Service handles refresh automatically, but if it fails, reconnection is required
+
+**Problem**: Empty data returned
+- **Solution**:
+  - Check date range - ensure data exists for the specified period
+  - Verify user has data in their WHOOP account
+  - Try a wider date range
+  - Check that user has granted necessary permissions
+
+**Problem**: Data format unexpected
+- **Solution**:
+  - Check `WearMetrics` structure - all data is normalized
+  - Use `metrics` dictionary for numeric values
+  - Use `meta` dictionary for string metadata
+  - Check `source` field to identify data origin
+
+#### Network Issues
+
+**Problem**: "No connection" error
+- **Solution**:
+  - Check internet connectivity
+  - Verify base URL is correct and accessible
+  - Check firewall/proxy settings
+  - Test with: `curl https://synheart-wear-service-leatest.onrender.com/health`
+
+**Problem**: "Timeout" error
+- **Solution**:
+  - Network may be slow - retry the request
+  - Check server status
+  - Increase timeout if needed (modify NetworkClient)
+
+**Problem**: "Rate limit exceeded" error
+- **Solution**:
+  - Too many requests - wait before retrying
+  - Implement exponential backoff
+  - Reduce request frequency
+
+#### Configuration Issues
+
+**Problem**: "Provider not configured" error
+- **Solution**:
+  - Ensure `appId` is provided in `SynheartWearConfig`
+  - Verify `.whoop` is in `enabledAdapters`
+  - Check that provider is initialized before use
+
+**Problem**: Data not merging from multiple sources
+- **Solution**:
+  - Verify both adapters are in `enabledAdapters`
+  - Check that WHOOP is connected (`isConnected()`)
+  - Ensure HealthKit permissions are granted
+  - Check `readMetrics()` source field - should be "merged_..."
+
+### Debugging Tips
+
+1. **Enable Logging**: Check console for warning messages
+   ```swift
+   // SDK logs warnings for failed data sources
+   // Check console output for details
+   ```
+
+2. **Verify Connection State**:
+   ```swift
+   if let whoopProvider = try? synheartWear.getProvider(.whoop) as? WhoopProvider {
+       print("Connected: \(whoopProvider.isConnected())")
+       print("User ID: \(whoopProvider.getUserId() ?? "none")")
+   }
+   ```
+
+3. **Test API Connectivity**:
+   ```bash
+   # Test if service is accessible
+   curl https://synheart-wear-service-leatest.onrender.com/health
+   ```
+
+4. **Check Swagger Documentation**:
+   - Visit: https://synheart-wear-service-leatest.onrender.com/swagger/index.html
+   - Verify endpoint paths and request/response formats
+
+5. **Validate Configuration**:
+   ```swift
+   let config = SynheartWearConfig(
+       enabledAdapters: [.whoop],
+       appId: "your-app-id", // Must be set
+       baseUrl: URL(string: "https://synheart-wear-service-leatest.onrender.com")!,
+       redirectUri: "yourapp://oauth/callback" // Must match Info.plist
+   )
+   ```
+
+### Getting Help
+
+- **Check Documentation**: Review this README and API documentation
+- **Swagger UI**: https://synheart-wear-service-leatest.onrender.com/swagger/index.html
+- **GitHub Issues**: Report bugs or ask questions
+- **Logs**: Check console output for detailed error messages
 
 ## 👥 Authors
 

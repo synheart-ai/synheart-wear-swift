@@ -190,6 +190,11 @@ public struct SynheartWearConfig {
     public let streamInterval: TimeInterval
     public let maxCacheSize: Int64
     public let maxCacheAge: TimeInterval
+    
+    // Wear Service configuration
+    public let baseUrl: URL?
+    public let appId: String?
+    public let redirectUri: String?
 
     public init(
         enabledAdapters: Set<DeviceAdapter> = [.appleHealthKit],
@@ -197,7 +202,10 @@ public struct SynheartWearConfig {
         enableEncryption: Bool = true,
         streamInterval: TimeInterval = 3.0,
         maxCacheSize: Int64 = 100 * 1024 * 1024, // 100 MB
-        maxCacheAge: TimeInterval = 30 * 24 * 60 * 60 // 30 days
+        maxCacheAge: TimeInterval = 30 * 24 * 60 * 60, // 30 days
+        baseUrl: URL? = nil,
+        appId: String? = nil,
+        redirectUri: String? = nil
     ) {
         self.enabledAdapters = enabledAdapters
         self.enableLocalCaching = enableLocalCaching
@@ -205,5 +213,8 @@ public struct SynheartWearConfig {
         self.streamInterval = streamInterval
         self.maxCacheSize = maxCacheSize
         self.maxCacheAge = maxCacheAge
+        self.baseUrl = baseUrl
+        self.appId = appId
+        self.redirectUri = redirectUri
     }
 }
