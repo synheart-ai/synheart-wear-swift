@@ -520,6 +520,49 @@ do {
 }
 ```
 
+### Error Handling
+
+The SDK provides comprehensive error handling for various scenarios:
+
+```swift
+do {
+    let data = try await whoopProvider.fetchRecovery()
+} catch SynheartWearError.notConnected {
+    // User hasn't connected their account
+    print("Please connect your WHOOP account first")
+} catch SynheartWearError.tokenExpired {
+    // Token expired - reconnect
+    print("Session expired. Please reconnect.")
+    try await whoopProvider.connect()
+} catch SynheartWearError.authenticationFailed {
+    // Authentication failed
+    print("Authentication failed. Please try again.")
+} catch SynheartWearError.rateLimitExceeded {
+    // Too many requests
+    print("Rate limit exceeded. Please try again later.")
+} catch SynheartWearError.noConnection {
+    // No internet connection
+    print("No internet connection. Please check your network.")
+} catch SynheartWearError.timeout {
+    // Request timed out
+    print("Request timed out. Please try again.")
+} catch SynheartWearError.serverError(let code, let message) {
+    // Server error
+    print("Server error (\(code)): \(message ?? "Unknown error")")
+} catch {
+    // Other errors
+    print("Error: \(error)")
+}
+```
+
+**Graceful Disconnection**: The `disconnect()` method always clears local state, even if the server call fails (e.g., offline):
+
+```swift
+// Disconnect always succeeds locally, even if offline
+try await whoopProvider.disconnect()
+// Local state is cleared, connection is removed
+```
+
 ### Custom Redirect URI
 
 You can use a custom redirect URI:

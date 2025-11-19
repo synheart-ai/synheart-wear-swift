@@ -194,8 +194,15 @@ public class SynheartWear {
                 if let latestRecovery = recoveryData.first {
                     allMetrics.append(latestRecovery)
                 }
+            } catch SynheartWearError.tokenExpired {
+                // Token expired - mark provider as disconnected but continue
+                print("Warning: WHOOP token expired. User needs to reconnect.")
+                // Clear the connection state
+                try? await whoopProvider.disconnect()
+            } catch SynheartWearError.notConnected {
+                // Already disconnected - just continue
             } catch {
-                // Log but don't fail - continue with other sources
+                // Other errors (network, etc.) - log but don't fail
                 print("Warning: Failed to read WHOOP metrics: \(error)")
             }
         }
@@ -501,6 +508,8 @@ public enum SynheartWearError: LocalizedError {
     
     // API errors
     case apiError(String)
+    case rateLimitExceeded
+    case serverError(Int, String?)
 
     public var errorDescription: String? {
         switch self {
@@ -532,6 +541,10 @@ public enum SynheartWearError: LocalizedError {
             return "Invalid response from server."
         case .apiError(let message):
             return "API error: \(message)"
+        case .rateLimitExceeded:
+            return "Rate limit exceeded. Please try again later."
+        case .serverError(let code, let message):
+            return message ?? "Server error: \(code). Please try again later."
         }
     }
 }
@@ -560,10 +573,12 @@ internal func convertNetworkError(_ error: NetworkError) -> SynheartWearError {
             return .tokenExpired
         } else if code == 403 {
             return .authenticationFailed
+        } else if code == 429 {
+            return .rateLimitExceeded
         }
         return .apiError(message ?? "Unknown API error")
-    case .serverError(_, let message):
-        return .apiError(message ?? "Unknown API error")
+    case .serverError(let code, let message):
+        return .serverError(code, message)
     case .notFound:
         return .notConnected
     default:

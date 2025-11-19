@@ -179,24 +179,32 @@ public class WhoopProvider: WearableProvider {
     /// Disconnect the user's account
     ///
     /// Removes the connection and clears stored credentials.
+    /// This method will succeed even if the API call fails, ensuring local
+    /// state is always cleared.
     ///
-    /// - Throws: SynheartWearError if disconnection fails
+    /// - Throws: SynheartWearError if disconnection fails (but local state is still cleared)
     public func disconnect() async throws {
         guard let userId = userId else {
-            throw SynheartWearError.notConnected
+            // Already disconnected - not an error
+            return
         }
         
+        // Always clear local state first
+        self.userId = nil
+        clearUserId()
+        
+        // Then try to notify the server
         do {
             _ = try await api.disconnect(userId: userId, appId: appId)
-            
-            // Clear stored user ID
-            self.userId = nil
-            clearUserId()
-            
         } catch let error as NetworkError {
-            throw convertNetworkError(error)
+            // Log but don't throw - local state is already cleared
+            // This handles cases where user is offline or account already disconnected
+            let convertedError = convertNetworkError(error)
+            print("Warning: Failed to notify server of disconnection: \(convertedError.errorDescription ?? "Unknown error")")
+            // Don't throw - disconnection is complete locally
         } catch {
-            throw SynheartWearError.apiError(error.localizedDescription)
+            print("Warning: Unexpected error during disconnect: \(error.localizedDescription)")
+            // Don't throw - disconnection is complete locally
         }
     }
     
@@ -238,11 +246,26 @@ public class WhoopProvider: WearableProvider {
                 cursor: cursor
             )
             
-            return convertDataResponseToMetrics(response, dataType: "recovery")
+            // Validate response
+            guard !response.records.isEmpty else {
+                return [] // Empty response is valid, just return empty array
+            }
+            
+            let metrics = convertDataResponseToMetrics(response, dataType: "recovery")
+            
+            // Validate converted metrics
+            let validMetrics = metrics.filter { metric in
+                // Basic validation - ensure we have at least a timestamp
+                metric.timestamp.timeIntervalSince1970 > 0
+            }
+            
+            return validMetrics
         } catch let error as NetworkError {
             throw convertNetworkError(error)
+        } catch let error as SynheartWearError {
+            throw error
         } catch {
-            throw SynheartWearError.apiError(error.localizedDescription)
+            throw SynheartWearError.apiError("Unexpected error: \(error.localizedDescription)")
         }
     }
     
@@ -275,11 +298,25 @@ public class WhoopProvider: WearableProvider {
                 cursor: cursor
             )
             
-            return convertDataResponseToMetrics(response, dataType: "sleep")
+            // Validate response
+            guard !response.records.isEmpty else {
+                return [] // Empty response is valid
+            }
+            
+            let metrics = convertDataResponseToMetrics(response, dataType: "sleep")
+            
+            // Validate converted metrics
+            let validMetrics = metrics.filter { metric in
+                metric.timestamp.timeIntervalSince1970 > 0
+            }
+            
+            return validMetrics
         } catch let error as NetworkError {
             throw convertNetworkError(error)
+        } catch let error as SynheartWearError {
+            throw error
         } catch {
-            throw SynheartWearError.apiError(error.localizedDescription)
+            throw SynheartWearError.apiError("Unexpected error: \(error.localizedDescription)")
         }
     }
     
@@ -312,11 +349,25 @@ public class WhoopProvider: WearableProvider {
                 cursor: cursor
             )
             
-            return convertDataResponseToMetrics(response, dataType: "workout")
+            // Validate response
+            guard !response.records.isEmpty else {
+                return [] // Empty response is valid
+            }
+            
+            let metrics = convertDataResponseToMetrics(response, dataType: "workout")
+            
+            // Validate converted metrics
+            let validMetrics = metrics.filter { metric in
+                metric.timestamp.timeIntervalSince1970 > 0
+            }
+            
+            return validMetrics
         } catch let error as NetworkError {
             throw convertNetworkError(error)
+        } catch let error as SynheartWearError {
+            throw error
         } catch {
-            throw SynheartWearError.apiError(error.localizedDescription)
+            throw SynheartWearError.apiError("Unexpected error: \(error.localizedDescription)")
         }
     }
     
@@ -349,11 +400,25 @@ public class WhoopProvider: WearableProvider {
                 cursor: cursor
             )
             
-            return convertDataResponseToMetrics(response, dataType: "cycle")
+            // Validate response
+            guard !response.records.isEmpty else {
+                return [] // Empty response is valid
+            }
+            
+            let metrics = convertDataResponseToMetrics(response, dataType: "cycle")
+            
+            // Validate converted metrics
+            let validMetrics = metrics.filter { metric in
+                metric.timestamp.timeIntervalSince1970 > 0
+            }
+            
+            return validMetrics
         } catch let error as NetworkError {
             throw convertNetworkError(error)
+        } catch let error as SynheartWearError {
+            throw error
         } catch {
-            throw SynheartWearError.apiError(error.localizedDescription)
+            throw SynheartWearError.apiError("Unexpected error: \(error.localizedDescription)")
         }
     }
     
