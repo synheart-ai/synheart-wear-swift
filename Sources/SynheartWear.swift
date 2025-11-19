@@ -425,10 +425,21 @@ internal func convertNetworkError(_ error: NetworkError) -> SynheartWearError {
     case .hostUnreachable:
         return .hostUnreachable
     case .unauthorized:
-        return .authenticationFailed
+        // 401 Unauthorized typically means token expired
+        // The Wear Service should handle refresh automatically, but if it fails,
+        // the user needs to reconnect
+        return .tokenExpired
     case .invalidResponse, .decodingError:
         return .invalidResponse
-    case .clientError(_, let message), .serverError(_, let message):
+    case .clientError(let code, let message):
+        // 401 is already handled above, but check for other auth-related codes
+        if code == 401 {
+            return .tokenExpired
+        } else if code == 403 {
+            return .authenticationFailed
+        }
+        return .apiError(message ?? "Unknown API error")
+    case .serverError(_, let message):
         return .apiError(message ?? "Unknown API error")
     case .notFound:
         return .notConnected

@@ -417,6 +417,46 @@ if whoopProvider.isConnected() {
 Task {
     try? await whoopProvider.disconnect()
 }
+
+// Fetch data (with automatic token refresh)
+Task {
+    do {
+        let recovery = try await whoopProvider.fetchRecovery(
+            start: Date().addingTimeInterval(-7 * 24 * 60 * 60), // Last 7 days
+            end: Date(),
+            limit: 25
+        )
+        
+        for record in recovery {
+            print("Recovery: \(record.metrics)")
+        }
+    } catch SynheartWearError.tokenExpired {
+        // Token expired and refresh failed - user needs to reconnect
+        print("Session expired. Please reconnect your WHOOP account.")
+        try? await whoopProvider.connect()
+    } catch {
+        print("Error fetching data: \(error)")
+    }
+}
+```
+
+### Token Refresh
+
+The Wear Service automatically handles token refresh in the background. If a token expires:
+
+1. **Automatic Refresh**: The Wear Service will attempt to refresh the token automatically
+2. **If Refresh Fails**: The SDK will throw a `.tokenExpired` error
+3. **Reconnection Required**: The user must call `connect()` again to re-authenticate
+
+```swift
+// Handle token expiration
+do {
+    let data = try await whoopProvider.fetchRecovery()
+    // Use data...
+} catch SynheartWearError.tokenExpired {
+    // Token expired - reconnect
+    try await whoopProvider.connect()
+}
 ```
 
 ### Custom Redirect URI

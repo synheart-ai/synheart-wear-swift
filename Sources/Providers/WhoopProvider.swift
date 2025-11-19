@@ -204,6 +204,10 @@ public class WhoopProvider: WearableProvider {
     
     /// Fetch recovery data from WHOOP
     ///
+    /// The Wear Service automatically handles token refresh if needed.
+    /// If token refresh fails, this method will throw `.tokenExpired` error,
+    /// and the user will need to reconnect by calling `connect()` again.
+    ///
     /// - Parameters:
     ///   - start: Start date (optional)
     ///   - end: End date (optional)
@@ -211,6 +215,9 @@ public class WhoopProvider: WearableProvider {
     ///   - cursor: Pagination cursor (optional)
     /// - Returns: Array of recovery records as WearMetrics
     /// - Throws: SynheartWearError if fetch fails
+    ///   - `.notConnected` if user hasn't connected
+    ///   - `.tokenExpired` if token expired and refresh failed (user needs to reconnect)
+    ///   - Network errors for connection issues
     public func fetchRecovery(
         start: Date? = nil,
         end: Date? = nil,
