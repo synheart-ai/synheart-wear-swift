@@ -200,7 +200,7 @@ public class WhoopProvider: WearableProvider {
         }
     }
     
-    // MARK: - Data Fetching Methods (Stubs - to be implemented in Phase 4)
+    // MARK: - Data Fetching Methods
     
     /// Fetch recovery data from WHOOP
     ///
@@ -209,7 +209,7 @@ public class WhoopProvider: WearableProvider {
     ///   - end: End date (optional)
     ///   - limit: Maximum number of records (optional, default: 100)
     ///   - cursor: Pagination cursor (optional)
-    /// - Returns: Array of recovery records
+    /// - Returns: Array of recovery records as WearMetrics
     /// - Throws: SynheartWearError if fetch fails
     public func fetchRecovery(
         start: Date? = nil,
@@ -217,8 +217,26 @@ public class WhoopProvider: WearableProvider {
         limit: Int? = nil,
         cursor: String? = nil
     ) async throws -> [WearMetrics] {
-        // TODO: Implement in Phase 4
-        throw SynheartWearError.notConnected
+        guard let userId = userId else {
+            throw SynheartWearError.notConnected
+        }
+        
+        do {
+            let response = try await api.fetchRecovery(
+                userId: userId,
+                appId: appId,
+                start: start,
+                end: end,
+                limit: limit,
+                cursor: cursor
+            )
+            
+            return convertDataResponseToMetrics(response, dataType: "recovery")
+        } catch let error as NetworkError {
+            throw convertNetworkError(error)
+        } catch {
+            throw SynheartWearError.apiError(error.localizedDescription)
+        }
     }
     
     /// Fetch sleep data from WHOOP
@@ -228,7 +246,7 @@ public class WhoopProvider: WearableProvider {
     ///   - end: End date (optional)
     ///   - limit: Maximum number of records (optional, default: 100)
     ///   - cursor: Pagination cursor (optional)
-    /// - Returns: Array of sleep records
+    /// - Returns: Array of sleep records as WearMetrics
     /// - Throws: SynheartWearError if fetch fails
     public func fetchSleep(
         start: Date? = nil,
@@ -236,8 +254,26 @@ public class WhoopProvider: WearableProvider {
         limit: Int? = nil,
         cursor: String? = nil
     ) async throws -> [WearMetrics] {
-        // TODO: Implement in Phase 4
-        throw SynheartWearError.notConnected
+        guard let userId = userId else {
+            throw SynheartWearError.notConnected
+        }
+        
+        do {
+            let response = try await api.fetchSleep(
+                userId: userId,
+                appId: appId,
+                start: start,
+                end: end,
+                limit: limit,
+                cursor: cursor
+            )
+            
+            return convertDataResponseToMetrics(response, dataType: "sleep")
+        } catch let error as NetworkError {
+            throw convertNetworkError(error)
+        } catch {
+            throw SynheartWearError.apiError(error.localizedDescription)
+        }
     }
     
     /// Fetch workout data from WHOOP
@@ -247,7 +283,7 @@ public class WhoopProvider: WearableProvider {
     ///   - end: End date (optional)
     ///   - limit: Maximum number of records (optional, default: 100)
     ///   - cursor: Pagination cursor (optional)
-    /// - Returns: Array of workout records
+    /// - Returns: Array of workout records as WearMetrics
     /// - Throws: SynheartWearError if fetch fails
     public func fetchWorkouts(
         start: Date? = nil,
@@ -255,8 +291,26 @@ public class WhoopProvider: WearableProvider {
         limit: Int? = nil,
         cursor: String? = nil
     ) async throws -> [WearMetrics] {
-        // TODO: Implement in Phase 4
-        throw SynheartWearError.notConnected
+        guard let userId = userId else {
+            throw SynheartWearError.notConnected
+        }
+        
+        do {
+            let response = try await api.fetchWorkouts(
+                userId: userId,
+                appId: appId,
+                start: start,
+                end: end,
+                limit: limit,
+                cursor: cursor
+            )
+            
+            return convertDataResponseToMetrics(response, dataType: "workout")
+        } catch let error as NetworkError {
+            throw convertNetworkError(error)
+        } catch {
+            throw SynheartWearError.apiError(error.localizedDescription)
+        }
     }
     
     /// Fetch cycle data from WHOOP
@@ -266,7 +320,7 @@ public class WhoopProvider: WearableProvider {
     ///   - end: End date (optional)
     ///   - limit: Maximum number of records (optional, default: 100)
     ///   - cursor: Pagination cursor (optional)
-    /// - Returns: Array of cycle records
+    /// - Returns: Array of cycle records as WearMetrics
     /// - Throws: SynheartWearError if fetch fails
     public func fetchCycles(
         start: Date? = nil,
@@ -274,11 +328,298 @@ public class WhoopProvider: WearableProvider {
         limit: Int? = nil,
         cursor: String? = nil
     ) async throws -> [WearMetrics] {
-        // TODO: Implement in Phase 4
-        throw SynheartWearError.notConnected
+        guard let userId = userId else {
+            throw SynheartWearError.notConnected
+        }
+        
+        do {
+            let response = try await api.fetchCycles(
+                userId: userId,
+                appId: appId,
+                start: start,
+                end: end,
+                limit: limit,
+                cursor: cursor
+            )
+            
+            return convertDataResponseToMetrics(response, dataType: "cycle")
+        } catch let error as NetworkError {
+            throw convertNetworkError(error)
+        } catch {
+            throw SynheartWearError.apiError(error.localizedDescription)
+        }
     }
     
     // MARK: - Private Methods
+    
+    /// Convert DataResponse from API to array of WearMetrics
+    ///
+    /// - Parameters:
+    ///   - response: DataResponse from Wear Service API
+    ///   - dataType: Type of data (recovery, sleep, workout, cycle)
+    /// - Returns: Array of WearMetrics
+    private func convertDataResponseToMetrics(_ response: DataResponse, dataType: String) -> [WearMetrics] {
+        return response.records.compactMap { record in
+            convertDataRecordToMetrics(record, dataType: dataType, vendor: response.vendor, userId: response.userId)
+        }
+    }
+    
+    /// Convert a single DataRecord to WearMetrics
+    ///
+    /// - Parameters:
+    ///   - record: DataRecord from API
+    ///   - dataType: Type of data (recovery, sleep, workout, cycle)
+    ///   - vendor: Vendor name (e.g., "whoop")
+    ///   - userId: User ID
+    /// - Returns: WearMetrics or nil if conversion fails
+    private func convertDataRecordToMetrics(_ record: DataRecord, dataType: String, vendor: String, userId: String) -> WearMetrics? {
+        let data = record.fields
+        
+        // Extract timestamp (try multiple common field names)
+        let timestamp = extractTimestamp(from: data) ?? Date()
+        
+        // Extract device ID (use record ID or generate one)
+        let deviceId = extractString(from: data, keys: ["device_id", "deviceId", "id"]) ?? "\(vendor)_\(userId.prefix(8))"
+        
+        // Build metrics dictionary
+        var metrics: [String: Double] = [:]
+        var meta: [String: String] = [:]
+        
+        // Extract common metrics based on data type
+        switch dataType {
+        case "recovery":
+            extractRecoveryMetrics(from: data, into: &metrics, meta: &meta)
+        case "sleep":
+            extractSleepMetrics(from: data, into: &metrics, meta: &meta)
+        case "workout":
+            extractWorkoutMetrics(from: data, into: &metrics, meta: &meta)
+        case "cycle":
+            extractCycleMetrics(from: data, into: &metrics, meta: &meta)
+        default:
+            extractGenericMetrics(from: data, into: &metrics, meta: &meta)
+        }
+        
+        // Add data type to meta
+        meta["data_type"] = dataType
+        meta["vendor"] = vendor
+        
+        return WearMetrics(
+            timestamp: timestamp,
+            deviceId: deviceId,
+            source: "\(vendor)_\(dataType)",
+            metrics: metrics,
+            meta: meta,
+            rrIntervals: extractRRIntervals(from: data)
+        )
+    }
+    
+    /// Extract timestamp from data record
+    private func extractTimestamp(from data: [String: AnyCodable]) -> Date? {
+        // Try common timestamp field names
+        let timestampKeys = ["timestamp", "created_at", "start_time", "end_time", "date", "time"]
+        
+        for key in timestampKeys {
+            if let value = data[key]?.value {
+                if let stringValue = value as? String {
+                    // Try ISO8601 format
+                    let formatter = ISO8601DateFormatter()
+                    formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+                    if let date = formatter.date(from: stringValue) {
+                        return date
+                    }
+                    // Try without fractional seconds
+                    formatter.formatOptions = [.withInternetDateTime]
+                    if let date = formatter.date(from: stringValue) {
+                        return date
+                    }
+                } else if let doubleValue = value as? Double {
+                    // Unix timestamp
+                    return Date(timeIntervalSince1970: doubleValue)
+                } else if let intValue = value as? Int {
+                    // Unix timestamp as integer
+                    return Date(timeIntervalSince1970: TimeInterval(intValue))
+                }
+            }
+        }
+        
+        return nil
+    }
+    
+    /// Extract string value from data using multiple possible keys
+    private func extractString(from data: [String: AnyCodable], keys: [String]) -> String? {
+        for key in keys {
+            if let value = data[key]?.value as? String {
+                return value
+            }
+        }
+        return nil
+    }
+    
+    /// Extract double value from data using multiple possible keys
+    private func extractDouble(from data: [String: AnyCodable], keys: [String]) -> Double? {
+        for key in keys {
+            if let value = data[key]?.value {
+                if let doubleValue = value as? Double {
+                    return doubleValue
+                } else if let intValue = value as? Int {
+                    return Double(intValue)
+                } else if let stringValue = value as? String, let doubleValue = Double(stringValue) {
+                    return doubleValue
+                }
+            }
+        }
+        return nil
+    }
+    
+    /// Extract recovery-specific metrics
+    private func extractRecoveryMetrics(from data: [String: AnyCodable], into metrics: inout [String: Double], meta: inout [String: String]) {
+        // Recovery score
+        if let score = extractDouble(from: data, keys: ["score", "recovery_score", "recoveryScore"]) {
+            metrics["recovery_score"] = score
+        }
+        
+        // HRV metrics
+        if let hrv = extractDouble(from: data, keys: ["hrv", "hrv_rmssd", "hrvRmssd", "rmssd"]) {
+            metrics["hrv_rmssd"] = hrv
+        }
+        if let sdnn = extractDouble(from: data, keys: ["hrv_sdnn", "hrvSdnn", "sdnn"]) {
+            metrics["hrv_sdnn"] = sdnn
+        }
+        
+        // Heart rate
+        if let hr = extractDouble(from: data, keys: ["hr", "heart_rate", "heartRate", "resting_heart_rate", "restingHeartRate"]) {
+            metrics["hr"] = hr
+        }
+        
+        // RHR (Resting Heart Rate)
+        if let rhr = extractDouble(from: data, keys: ["rhr", "resting_hr", "restingHr"]) {
+            metrics["rhr"] = rhr
+        }
+        
+        // Strain
+        if let strain = extractDouble(from: data, keys: ["strain", "strain_score", "strainScore"]) {
+            metrics["strain"] = strain
+        }
+    }
+    
+    /// Extract sleep-specific metrics
+    private func extractSleepMetrics(from data: [String: AnyCodable], into metrics: inout [String: Double], meta: inout [String: String]) {
+        // Sleep duration (in seconds, convert to hours for consistency)
+        if let duration = extractDouble(from: data, keys: ["duration", "sleep_duration", "sleepDuration", "total_sleep_time", "totalSleepTime"]) {
+            metrics["sleep_duration_hours"] = duration / 3600.0
+        }
+        
+        // Sleep efficiency
+        if let efficiency = extractDouble(from: data, keys: ["efficiency", "sleep_efficiency", "sleepEfficiency"]) {
+            metrics["sleep_efficiency"] = efficiency
+        }
+        
+        // Sleep score
+        if let score = extractDouble(from: data, keys: ["score", "sleep_score", "sleepScore"]) {
+            metrics["sleep_score"] = score
+        }
+        
+        // Stages
+        if let rem = extractDouble(from: data, keys: ["rem", "rem_duration", "remDuration"]) {
+            metrics["rem_duration_minutes"] = rem / 60.0
+        }
+        if let deep = extractDouble(from: data, keys: ["deep", "deep_duration", "deepDuration", "slow_wave", "slowWave"]) {
+            metrics["deep_duration_minutes"] = deep / 60.0
+        }
+        if let light = extractDouble(from: data, keys: ["light", "light_duration", "lightDuration"]) {
+            metrics["light_duration_minutes"] = light / 60.0
+        }
+    }
+    
+    /// Extract workout-specific metrics
+    private func extractWorkoutMetrics(from data: [String: AnyCodable], into metrics: inout [String: Double], meta: inout [String: String]) {
+        // Duration
+        if let duration = extractDouble(from: data, keys: ["duration", "workout_duration", "workoutDuration"]) {
+            metrics["workout_duration_minutes"] = duration / 60.0
+        }
+        
+        // Calories
+        if let calories = extractDouble(from: data, keys: ["calories", "calories_burned", "caloriesBurned", "energy"]) {
+            metrics["calories"] = calories
+        }
+        
+        // Heart rate
+        if let avgHr = extractDouble(from: data, keys: ["avg_hr", "avgHr", "average_heart_rate", "averageHeartRate"]) {
+            metrics["hr"] = avgHr
+        }
+        if let maxHr = extractDouble(from: data, keys: ["max_hr", "maxHr", "max_heart_rate", "maxHeartRate"]) {
+            metrics["max_hr"] = maxHr
+        }
+        
+        // Distance
+        if let distance = extractDouble(from: data, keys: ["distance", "distance_meters", "distanceMeters"]) {
+            metrics["distance"] = distance
+        }
+        
+        // Workout type
+        if let workoutType = extractString(from: data, keys: ["type", "workout_type", "workoutType", "sport"]) {
+            meta["workout_type"] = workoutType
+        }
+    }
+    
+    /// Extract cycle-specific metrics
+    private func extractCycleMetrics(from data: [String: AnyCodable], into metrics: inout [String: Double], meta: inout [String: String]) {
+        // Cycle day
+        if let day = extractDouble(from: data, keys: ["day", "cycle_day", "cycleDay"]) {
+            metrics["cycle_day"] = day
+        }
+        
+        // Strain
+        if let strain = extractDouble(from: data, keys: ["strain", "strain_score", "strainScore"]) {
+            metrics["strain"] = strain
+        }
+        
+        // Recovery
+        if let recovery = extractDouble(from: data, keys: ["recovery", "recovery_score", "recoveryScore"]) {
+            metrics["recovery_score"] = recovery
+        }
+    }
+    
+    /// Extract generic metrics (fallback)
+    private func extractGenericMetrics(from data: [String: AnyCodable], into metrics: inout [String: Double], meta: inout [String: String]) {
+        // Try to extract any numeric values as metrics
+        for (key, value) in data {
+            if let doubleValue = value.value as? Double {
+                metrics[key] = doubleValue
+            } else if let intValue = value.value as? Int {
+                metrics[key] = Double(intValue)
+            } else if let stringValue = value.value as? String {
+                meta[key] = stringValue
+            }
+        }
+    }
+    
+    /// Extract RR intervals from data
+    private func extractRRIntervals(from data: [String: AnyCodable]) -> [Double]? {
+        // Try common field names for RR intervals
+        let rrKeys = ["rr_intervals", "rrIntervals", "rri", "intervals"]
+        
+        for key in rrKeys {
+            if let value = data[key]?.value {
+                if let array = value as? [Double] {
+                    return array
+                } else if let array = value as? [Int] {
+                    return array.map { Double($0) }
+                } else if let array = value as? [Any] {
+                    return array.compactMap { item in
+                        if let double = item as? Double {
+                            return double
+                        } else if let int = item as? Int {
+                            return Double(int)
+                        }
+                        return nil
+                    }
+                }
+            }
+        }
+        
+        return nil
+    }
     
     /// Generate a random state parameter for OAuth flow
     private func generateState() -> String {

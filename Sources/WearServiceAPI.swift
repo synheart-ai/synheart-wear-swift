@@ -333,22 +333,43 @@ internal struct DataResponse: Codable {
 
 /// Individual data record (structure depends on data type)
 internal struct DataRecord: Codable {
-    // Generic structure - will be extended based on actual API response
-    // For now, we'll decode as a flexible dictionary
-    let data: [String: AnyCodable]
-    
-    enum CodingKeys: String, CodingKey {
-        case data
-    }
+    // Generic structure - records are flexible dictionaries
+    // The record itself is the data object (not nested under a "data" key)
+    let fields: [String: AnyCodable]
     
     init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        data = try container.decode([String: AnyCodable].self, forKey: .data)
+        // Try to decode as a direct dictionary first (most common case)
+        // Records in the API response are JSON objects, so we decode them as dictionaries
+        do {
+            let container = try decoder.singleValueContainer()
+            fields = try container.decode([String: AnyCodable].self)
+        } catch {
+            // Fallback: try to decode as nested structure with "data" key
+            // This handles cases where records might be wrapped
+            let keyedContainer = try decoder.container(keyedBy: CodingKeys.self)
+            if keyedContainer.contains(.data) {
+                fields = try keyedContainer.decode([String: AnyCodable].self, forKey: .data)
+            } else {
+                // If no "data" key, try to decode all keys as a dictionary
+                var decodedFields: [String: AnyCodable] = [:]
+                let allKeys = keyedContainer.allKeys
+                for key in allKeys {
+                    if let value = try? keyedContainer.decode(AnyCodable.self, forKey: key) {
+                        decodedFields[key.stringValue] = value
+                    }
+                }
+                fields = decodedFields
+            }
+        }
     }
     
     func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(data, forKey: .data)
+        var container = encoder.singleValueContainer()
+        try container.encode(fields)
+    }
+    
+    enum CodingKeys: String, CodingKey {
+        case data
     }
 }
 
