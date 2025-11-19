@@ -254,7 +254,7 @@ try await synheartWear.clearOldCache(maxAge: 30 * 24 * 60 * 60)
 | Apple Watch | iOS | HealthKit | ✅ Ready |
 | Fitbit | iOS | HealthKit Sync | ✅ Ready |
 | Garmin | iOS | HealthKit Sync | 🔄 In Development |
-| Whoop | iOS | REST API | 📋 Planned |
+| Whoop | iOS | REST API | ✅ Ready |
 | Oura Ring | iOS | HealthKit Sync | ✅ Ready |
 
 ## 🔒 Privacy & Security
@@ -295,6 +295,145 @@ swift test --enable-code-coverage
 # Build for iOS
 swift build -c release
 ```
+
+## 🔗 WHOOP Integration
+
+### Setup Deep Link Handling
+
+The WHOOP provider uses OAuth flow which requires deep link handling in your app.
+
+#### 1. Configure URL Scheme in Info.plist
+
+Add to your `Info.plist`:
+
+```xml
+<key>CFBundleURLTypes</key>
+<array>
+    <dict>
+        <key>CFBundleURLSchemes</key>
+        <array>
+            <string>synheart</string>
+        </array>
+        <key>CFBundleURLName</key>
+        <string>com.yourcompany.synheart</string>
+    </dict>
+</array>
+```
+
+#### 2. Handle Deep Links
+
+**For SwiftUI apps:**
+
+```swift
+import SwiftUI
+
+@main
+struct MyApp: App {
+    var body: some Scene {
+        WindowGroup {
+            ContentView()
+                .onOpenURL { url in
+                    handleDeepLink(url)
+                }
+        }
+    }
+    
+    func handleDeepLink(_ url: URL) {
+        if url.scheme == "synheart" && url.host == "oauth" && url.path == "/callback" {
+            let components = URLComponents(url: url, resolvingAgainstBaseURL: false)
+            let code = components?.queryItems?.first(where: { $0.name == "code" })?.value
+            let state = components?.queryItems?.first(where: { $0.name == "state" })?.value
+            
+            if let code = code, let state = state {
+                // Pass to your provider instance
+                Task {
+                    try? await whoopProvider.connectWithCode(
+                        code: code,
+                        state: state,
+                        redirectUri: url.absoluteString
+                    )
+                }
+            }
+        }
+    }
+}
+```
+
+**For UIKit apps:**
+
+```swift
+// In your AppDelegate or SceneDelegate
+func application(_ app: UIApplication, open url: URL, options: [UIApplication.OpenURLOptionsKey : Any] = [:]) -> Bool {
+    if url.scheme == "synheart" && url.host == "oauth" && url.path == "/callback" {
+        let components = URLComponents(url: url, resolvingAgainstBaseURL: false)
+        let code = components?.queryItems?.first(where: { $0.name == "code" })?.value
+        let state = components?.queryItems?.first(where: { $0.name == "state" })?.value
+        
+        if let code = code, let state = state {
+            Task {
+                try? await whoopProvider.connectWithCode(
+                    code: code,
+                    state: state,
+                    redirectUri: url.absoluteString
+                )
+            }
+        }
+        return true
+    }
+    return false
+}
+```
+
+#### 3. Connect to WHOOP
+
+```swift
+import SynheartWear
+
+// Initialize WHOOP provider
+let whoopProvider = WhoopProvider(
+    appId: "your-app-id",
+    baseUrl: URL(string: "https://api.wear.synheart.io")!,
+    redirectUri: "synheart://oauth/callback"
+)
+
+// Start OAuth flow
+Task {
+    do {
+        try await whoopProvider.connect()
+        // Browser will open for user authorization
+        // After user approves, deep link will be handled automatically
+    } catch {
+        print("Connection failed: \(error)")
+    }
+}
+
+// Check connection status
+if whoopProvider.isConnected() {
+    let userId = whoopProvider.getUserId()
+    print("Connected as user: \(userId ?? "unknown")")
+}
+
+// Disconnect
+Task {
+    try? await whoopProvider.disconnect()
+}
+```
+
+### Custom Redirect URI
+
+You can use a custom redirect URI:
+
+```swift
+let whoopProvider = WhoopProvider(
+    appId: "your-app-id",
+    redirectUri: "myapp://oauth/callback" // Custom deep link
+)
+```
+
+**Important**: The redirect URI must:
+- Match the scheme configured in your `Info.plist`
+- Match the redirect URI configured in the Wear Service integration
+- Be registered with WHOOP in their developer portal
 
 ## 📱 SwiftUI Example
 
