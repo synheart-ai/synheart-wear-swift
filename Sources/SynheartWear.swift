@@ -364,6 +364,20 @@ public enum SynheartWearError: LocalizedError {
     case permissionDenied
     case invalidData
     case cacheError(String)
+    
+    // Network errors
+    case noConnection
+    case timeout
+    case hostUnreachable
+    case invalidResponse
+    
+    // Authentication errors
+    case notConnected
+    case authenticationFailed
+    case tokenExpired
+    
+    // API errors
+    case apiError(String)
 
     public var errorDescription: String? {
         switch self {
@@ -379,6 +393,46 @@ public enum SynheartWearError: LocalizedError {
             return "Invalid data received from HealthKit."
         case .cacheError(let message):
             return "Cache error: \(message)"
+        case .noConnection:
+            return "No internet connection available. Please check your network settings."
+        case .timeout:
+            return "Request timed out. Please try again."
+        case .hostUnreachable:
+            return "Cannot reach server. Please check your internet connection."
+        case .notConnected:
+            return "Account not connected. Please connect your wearable device first."
+        case .authenticationFailed:
+            return "Authentication failed. Please reconnect your account."
+        case .tokenExpired:
+            return "Session expired. Please reconnect your account."
+        case .invalidResponse:
+            return "Invalid response from server."
+        case .apiError(let message):
+            return "API error: \(message)"
         }
+    }
+}
+
+// MARK: - Network Error Conversion
+
+/// Convert internal NetworkError to public SynheartWearError
+internal func convertNetworkError(_ error: NetworkError) -> SynheartWearError {
+    switch error {
+    case .noConnection:
+        return .noConnection
+    case .timeout:
+        return .timeout
+    case .hostUnreachable:
+        return .hostUnreachable
+    case .unauthorized:
+        return .authenticationFailed
+    case .invalidResponse, .decodingError:
+        return .invalidResponse
+    case .clientError(_, let message), .serverError(_, let message):
+        return .apiError(message ?? "Unknown API error")
+    case .notFound:
+        return .notConnected
+    default:
+        return .apiError(error.errorDescription ?? "Network error occurred")
     }
 }

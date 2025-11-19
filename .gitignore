@@ -127,3 +127,8 @@ Temporary Items
 *.log
 *.swift-version
 
+# Implementation documentation (internal planning docs)
+IMPLEMENTATION_PLAN.md
+IMPLEMENTATION_SUMMARY.md
+IMPLEMENTATION_CHECKLIST.md
+
