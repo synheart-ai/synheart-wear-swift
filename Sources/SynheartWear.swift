@@ -15,6 +15,9 @@ public class SynheartWear {
     private let healthStore = HKHealthStore()
 
     private var streamCancellables = Set<AnyCancellable>()
+    
+    // Wear Service providers
+    private var whoopProvider: WhoopProvider?
 
     /// Initialize SynheartWear with configuration
     ///
@@ -23,6 +26,37 @@ public class SynheartWear {
         self.config = config
         self.consentManager = ConsentManager()
         self.localCache = LocalCache(enableEncryption: config.enableEncryption)
+        
+        // Initialize providers if configuration is provided
+        if let appId = config.appId {
+            let baseUrl = config.baseUrl ?? URL(string: "https://api.wear.synheart.io")!
+            let redirectUri = config.redirectUri ?? "synheart://oauth/callback"
+            
+            if config.enabledAdapters.contains(.whoop) {
+                self.whoopProvider = WhoopProvider(
+                    appId: appId,
+                    baseUrl: baseUrl,
+                    redirectUri: redirectUri
+                )
+            }
+        }
+    }
+    
+    /// Get a wearable provider by adapter type
+    ///
+    /// - Parameter adapter: Device adapter type
+    /// - Returns: Provider instance if available and configured, nil otherwise
+    /// - Throws: SynheartWearError if provider is not configured
+    public func getProvider(_ adapter: DeviceAdapter) throws -> WearableProvider {
+        switch adapter {
+        case .whoop:
+            guard let provider = whoopProvider else {
+                throw SynheartWearError.apiError("WHOOP provider not configured. Please provide appId in SynheartWearConfig.")
+            }
+            return provider
+        case .appleHealthKit, .fitbit, .garmin:
+            throw SynheartWearError.apiError("Provider for \(adapter) not yet implemented.")
+        }
     }
 
     /// Initialize the SDK with permissions and setup

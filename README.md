@@ -68,6 +68,7 @@ Add HealthKit capability in Xcode:
 
 ### 2. Initialize the SDK
 
+**For HealthKit only:**
 ```swift
 import SynheartWear
 
@@ -76,6 +77,23 @@ let config = SynheartWearConfig(
     enableLocalCaching: true,
     enableEncryption: true,
     streamInterval: 3.0 // 3 seconds
+)
+
+let synheartWear = SynheartWear(config: config)
+```
+
+**For WHOOP integration:**
+```swift
+import SynheartWear
+
+let config = SynheartWearConfig(
+    enabledAdapters: [.appleHealthKit, .whoop],
+    enableLocalCaching: true,
+    enableEncryption: true,
+    streamInterval: 3.0,
+    baseUrl: URL(string: "https://api.wear.synheart.io")!, // Optional: defaults to production
+    appId: "your-app-id", // Required for WHOOP
+    redirectUri: "synheart://oauth/callback" // Optional: defaults to synheart://oauth/callback
 )
 
 let synheartWear = SynheartWear(config: config)
@@ -386,10 +404,29 @@ func application(_ app: UIApplication, open url: URL, options: [UIApplication.Op
 
 #### 3. Connect to WHOOP
 
+**Option 1: Using SynheartWear SDK (Recommended)**
 ```swift
 import SynheartWear
 
-// Initialize WHOOP provider
+// Configure SDK with WHOOP support
+let config = SynheartWearConfig(
+    enabledAdapters: [.whoop],
+    appId: "your-app-id",
+    baseUrl: URL(string: "https://api.wear.synheart.io")!,
+    redirectUri: "synheart://oauth/callback"
+)
+
+let synheartWear = SynheartWear(config: config)
+
+// Get WHOOP provider
+let whoopProvider = try synheartWear.getProvider(.whoop) as! WhoopProvider
+```
+
+**Option 2: Direct provider initialization**
+```swift
+import SynheartWear
+
+// Initialize WHOOP provider directly
 let whoopProvider = WhoopProvider(
     appId: "your-app-id",
     baseUrl: URL(string: "https://api.wear.synheart.io")!,
