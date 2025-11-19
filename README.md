@@ -10,12 +10,14 @@
 ## 🚀 Features
 
 - **📱 HealthKit Integration**: Native iOS biometric data access from Apple Watch
-- **⌚ Multi-Device Support**: Apple Watch, Fitbit, Garmin, Whoop (via HealthKit sync)
+- **⌚ Multi-Device Support**: Apple Watch, Fitbit, Garmin, Whoop (via HealthKit sync and cloud APIs)
+- **☁️ Cloud Integration**: Direct API access to WHOOP via Wear Service
 - **🔄 Real-Time Streaming**: Live HR and HRV data streams with Combine framework
 - **📊 Unified Schema**: Consistent data format across all devices
 - **🔒 Privacy-First**: Consent-based data access with encryption
 - **💾 Local Storage**: Encrypted offline data persistence with Keychain
 - **⚡ Swift Concurrency**: Modern async/await API
+- **🔐 OAuth Support**: Secure OAuth 2.0 flow for cloud-based providers
 
 ## 📦 Installation
 
@@ -649,8 +651,143 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - **Android SDK**: [synheart-wear-android](https://github.com/synheart-ai/synheart-wear-android)
 - **CLI Tool**: [synheart-wear-cli](https://github.com/synheart-ai/synheart-wear-cli)
 - **Cloud Service**: [synheart-wear-service](https://github.com/synheart-ai/synheart-wear-service)
+- **API Documentation**: [Swagger UI](https://synheart-wear-service-leatest.onrender.com/swagger/index.html)
 - **Synheart AI**: [synheart.ai](https://synheart.ai)
 - **Issues**: [GitHub Issues](https://github.com/synheart-ai/synheart-wear-ios/issues)
+
+## 🔧 Troubleshooting
+
+### Common Issues
+
+#### OAuth Flow Issues
+
+**Problem**: Deep link not opening app after OAuth approval
+- **Solution**: 
+  - Verify `Info.plist` has correct URL scheme configuration
+  - Ensure redirect URI matches exactly (case-sensitive)
+  - Check that redirect URI is registered with WHOOP developer portal
+  - Verify app is installed and URL scheme is unique
+
+**Problem**: "Authentication failed" error during `connectWithCode()`
+- **Solution**:
+  - State parameter mismatch - ensure you're using the same state from `connect()`
+  - OAuth flow may have expired - restart the flow by calling `connect()` again
+  - Check that code hasn't expired (OAuth codes expire quickly)
+
+**Problem**: Browser doesn't open when calling `connect()`
+- **Solution**:
+  - Check network connection
+  - Verify `appId` is correct
+  - Check that base URL is accessible
+  - Ensure app has proper permissions
+
+#### Data Fetching Issues
+
+**Problem**: "Not connected" error when fetching data
+- **Solution**:
+  - Verify `isConnected()` returns `true`
+  - Check that OAuth flow completed successfully
+  - Ensure `user_id` is stored (check Keychain)
+  - Try disconnecting and reconnecting
+
+**Problem**: "Token expired" error
+- **Solution**:
+  - Token refresh failed - user needs to reconnect
+  - Call `connect()` again to re-authenticate
+  - The Wear Service handles refresh automatically, but if it fails, reconnection is required
+
+**Problem**: Empty data returned
+- **Solution**:
+  - Check date range - ensure data exists for the specified period
+  - Verify user has data in their WHOOP account
+  - Try a wider date range
+  - Check that user has granted necessary permissions
+
+**Problem**: Data format unexpected
+- **Solution**:
+  - Check `WearMetrics` structure - all data is normalized
+  - Use `metrics` dictionary for numeric values
+  - Use `meta` dictionary for string metadata
+  - Check `source` field to identify data origin
+
+#### Network Issues
+
+**Problem**: "No connection" error
+- **Solution**:
+  - Check internet connectivity
+  - Verify base URL is correct and accessible
+  - Check firewall/proxy settings
+  - Test with: `curl https://synheart-wear-service-leatest.onrender.com/health`
+
+**Problem**: "Timeout" error
+- **Solution**:
+  - Network may be slow - retry the request
+  - Check server status
+  - Increase timeout if needed (modify NetworkClient)
+
+**Problem**: "Rate limit exceeded" error
+- **Solution**:
+  - Too many requests - wait before retrying
+  - Implement exponential backoff
+  - Reduce request frequency
+
+#### Configuration Issues
+
+**Problem**: "Provider not configured" error
+- **Solution**:
+  - Ensure `appId` is provided in `SynheartWearConfig`
+  - Verify `.whoop` is in `enabledAdapters`
+  - Check that provider is initialized before use
+
+**Problem**: Data not merging from multiple sources
+- **Solution**:
+  - Verify both adapters are in `enabledAdapters`
+  - Check that WHOOP is connected (`isConnected()`)
+  - Ensure HealthKit permissions are granted
+  - Check `readMetrics()` source field - should be "merged_..."
+
+### Debugging Tips
+
+1. **Enable Logging**: Check console for warning messages
+   ```swift
+   // SDK logs warnings for failed data sources
+   // Check console output for details
+   ```
+
+2. **Verify Connection State**:
+   ```swift
+   if let whoopProvider = try? synheartWear.getProvider(.whoop) as? WhoopProvider {
+       print("Connected: \(whoopProvider.isConnected())")
+       print("User ID: \(whoopProvider.getUserId() ?? "none")")
+   }
+   ```
+
+3. **Test API Connectivity**:
+   ```bash
+   # Test if service is accessible
+   curl https://synheart-wear-service-leatest.onrender.com/health
+   ```
+
+4. **Check Swagger Documentation**:
+   - Visit: https://synheart-wear-service-leatest.onrender.com/swagger/index.html
+   - Verify endpoint paths and request/response formats
+
+5. **Validate Configuration**:
+   ```swift
+   let config = SynheartWearConfig(
+       enabledAdapters: [.whoop],
+       appId: "your-app-id", // Must be set
+       baseUrl: URL(string: "https://synheart-wear-service-leatest.onrender.com")!,
+       redirectUri: "yourapp://oauth/callback" // Must match Info.plist
+   )
+   ```
+
+### Getting Help
+
+- **Check Documentation**: Review this README and API documentation
+- **Swagger UI**: https://synheart-wear-service-leatest.onrender.com/swagger/index.html
+- **GitHub Issues**: Report bugs or ask questions
+- **Logs**: Check console output for detailed error messages
 
 ## 👥 Authors
 
