@@ -316,11 +316,12 @@ internal struct DisconnectResponse: Codable {
 
 /// Generic data response from Wear Service
 internal struct DataResponse: Codable {
-    let vendor: String
+    let vendor: String?
     let appId: String
     let userId: String
     let records: [DataRecord]
     let cursor: String?
+    let organizationId: String?  // Optional field that may be present in some responses
     
     enum CodingKeys: String, CodingKey {
         case vendor
@@ -328,6 +329,46 @@ internal struct DataResponse: Codable {
         case userId = "user_id"
         case records
         case cursor
+        case organizationId = "organization_id"
+    }
+    
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        
+        // Decode required fields
+        appId = try container.decode(String.self, forKey: .appId)
+        userId = try container.decode(String.self, forKey: .userId)
+        
+        // Decode records - standard field name is "records"
+        // Try standard "records" first
+        do {
+            records = try container.decode([DataRecord].self, forKey: .records)
+        } catch {
+            // If "records" fails, provide a detailed error message
+            let availableKeys = container.allKeys.map { $0.stringValue }.joined(separator: ", ")
+            throw DecodingError.keyNotFound(
+                CodingKeys.records,
+                DecodingError.Context(
+                    codingPath: decoder.codingPath,
+                    debugDescription: "Failed to decode 'records' field. Available keys: \(availableKeys). Error: \(error.localizedDescription)"
+                )
+            )
+        }
+        
+        // Decode optional fields
+        vendor = try container.decodeIfPresent(String.self, forKey: .vendor)
+        cursor = try container.decodeIfPresent(String.self, forKey: .cursor)
+        organizationId = try container.decodeIfPresent(String.self, forKey: .organizationId)
+    }
+    
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encodeIfPresent(vendor, forKey: .vendor)
+        try container.encode(appId, forKey: .appId)
+        try container.encode(userId, forKey: .userId)
+        try container.encode(records, forKey: .records)
+        try container.encodeIfPresent(cursor, forKey: .cursor)
+        try container.encodeIfPresent(organizationId, forKey: .organizationId)
     }
 }
 
@@ -338,38 +379,15 @@ internal struct DataRecord: Codable {
     let fields: [String: AnyCodable]
     
     init(from decoder: Decoder) throws {
-        // Try to decode as a direct dictionary first (most common case)
+        // Strategy 1: Try to decode as a direct dictionary (most common case)
         // Records in the API response are JSON objects, so we decode them as dictionaries
-        do {
-            let container = try decoder.singleValueContainer()
-            fields = try container.decode([String: AnyCodable].self)
-        } catch {
-            // Fallback: try to decode as nested structure with "data" key
-            // This handles cases where records might be wrapped
-            let keyedContainer = try decoder.container(keyedBy: CodingKeys.self)
-            if keyedContainer.contains(.data) {
-                fields = try keyedContainer.decode([String: AnyCodable].self, forKey: .data)
-            } else {
-                // If no "data" key, try to decode all keys as a dictionary
-                var decodedFields: [String: AnyCodable] = [:]
-                let allKeys = keyedContainer.allKeys
-                for key in allKeys {
-                    if let value = try? keyedContainer.decode(AnyCodable.self, forKey: key) {
-                        decodedFields[key.stringValue] = value
-                    }
-                }
-                fields = decodedFields
-            }
-        }
+        let container = try decoder.singleValueContainer()
+        fields = try container.decode([String: AnyCodable].self)
     }
     
     func encode(to encoder: Encoder) throws {
         var container = encoder.singleValueContainer()
         try container.encode(fields)
-    }
-    
-    enum CodingKeys: String, CodingKey {
-        case data
     }
 }
 
@@ -386,6 +404,14 @@ internal struct AnyCodable: Codable {
     init(from decoder: Decoder) throws {
         let container = try decoder.singleValueContainer()
         
+        // Handle null values first
+        if container.decodeNil() {
+            // Use NSNull to represent null values (which is what JSON null maps to)
+            value = NSNull()
+            return
+        }
+        
+        // Try decoding different types in order
         if let bool = try? container.decode(Bool.self) {
             value = bool
         } else if let int = try? container.decode(Int.self) {
@@ -408,6 +434,12 @@ internal struct AnyCodable: Codable {
     
     func encode(to encoder: Encoder) throws {
         var container = encoder.singleValueContainer()
+        
+        // Handle null values
+        if value is NSNull {
+            try container.encodeNil()
+            return
+        }
         
         switch value {
         case let bool as Bool:

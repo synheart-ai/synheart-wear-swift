@@ -244,6 +244,75 @@ Example JSON output:
 }
 ```
 
+### WHOOP Data Structure
+
+WHOOP API responses use a nested `score` object structure. The SDK automatically extracts metrics from these nested objects:
+
+**Recovery Data Structure:**
+```json
+{
+  "records": [
+    {
+      "created_at": "2025-11-30T00:59:59.767Z",
+      "score": {
+        "recovery_score": 5,
+        "hrv_rmssd_milli": 37.586693,
+        "resting_heart_rate": 69,
+        "skin_temp_celsius": 35.199665,
+        "spo2_percentage": 95.125
+      }
+    }
+  ]
+}
+```
+
+**Sleep Data Structure:**
+```json
+{
+  "records": [
+    {
+      "start": "2025-11-29T20:13:12.680Z",
+      "end": "2025-11-29T22:55:13.090Z",
+      "score": {
+        "sleep_efficiency_percentage": 97.15766,
+        "sleep_performance_percentage": 11,
+        "stage_summary": {
+          "total_rem_sleep_time_milli": 1891120,
+          "total_slow_wave_sleep_time_milli": 3032060,
+          "total_light_sleep_time_milli": 4340230
+        }
+      }
+    }
+  ]
+}
+```
+
+**Workout Data Structure:**
+```json
+{
+  "records": [
+    {
+      "start": "2025-11-29T09:15:00.190Z",
+      "end": "2025-11-29T11:26:59.210Z",
+      "sport_name": "activity",
+      "score": {
+        "strain": 12.9671955,
+        "average_heart_rate": 123,
+        "max_heart_rate": 161,
+        "kilojoule": 3752.2947
+      }
+    }
+  ]
+}
+```
+
+The SDK automatically handles:
+- ✅ Nested `score` object extraction
+- ✅ Unit conversions (milliseconds → seconds, kilojoules → calories)
+- ✅ Deeply nested structures (e.g., `score.stage_summary.total_rem_sleep_time_milli`)
+- ✅ Null value handling
+- ✅ Multiple field name variations (snake_case, camelCase)
+
 ## 🔧 API Reference
 
 ### Core Methods
@@ -341,6 +410,100 @@ swift build -c release
 ```
 
 ## 🔗 WHOOP Integration
+
+### Data Extraction & Metric Mapping
+
+The SDK automatically extracts metrics from WHOOP API responses, which use a nested `score` object structure. Here's how metrics are mapped:
+
+#### Recovery Metrics
+
+| SDK Metric Name | WHOOP API Field | Unit Conversion | Description |
+|----------------|-----------------|-----------------|-------------|
+| `recovery_score` | `score.recovery_score` | None | Recovery score (0-100) |
+| `hrv_rmssd` | `score.hrv_rmssd_milli` | milliseconds → seconds | HRV RMSSD value |
+| `rhr` | `score.resting_heart_rate` | None | Resting heart rate (bpm) |
+| `hr` | `score.resting_heart_rate` | None | Heart rate (same as RHR) |
+| `skin_temperature` | `score.skin_temp_celsius` | None | Skin temperature (°C) |
+| `spo2` | `score.spo2_percentage` | None | Blood oxygen saturation (%) |
+
+**Example:**
+```swift
+let recovery = try await whoopProvider.fetchRecovery()
+for record in recovery {
+    print("Recovery Score: \(record.metrics["recovery_score"] ?? 0)")
+    print("HRV RMSSD: \(record.metrics["hrv_rmssd"] ?? 0) seconds")
+    print("RHR: \(record.metrics["rhr"] ?? 0) bpm")
+}
+```
+
+#### Sleep Metrics
+
+| SDK Metric Name | WHOOP API Field | Unit Conversion | Description |
+|----------------|-----------------|-----------------|-------------|
+| `sleep_duration_hours` | Calculated from `start`/`end` or `score.stage_summary.total_in_bed_time_milli` | milliseconds → hours | Total sleep duration |
+| `sleep_efficiency` | `score.sleep_efficiency_percentage` | None | Sleep efficiency (%) |
+| `sleep_performance` | `score.sleep_performance_percentage` | None | Sleep performance (%) |
+| `sleep_consistency` | `score.sleep_consistency_percentage` | None | Sleep consistency (%) |
+| `respiratory_rate` | `score.respiratory_rate` | None | Respiratory rate (breaths/min) |
+| `rem_duration_minutes` | `score.stage_summary.total_rem_sleep_time_milli` | milliseconds → minutes | REM sleep duration |
+| `deep_duration_minutes` | `score.stage_summary.total_slow_wave_sleep_time_milli` | milliseconds → minutes | Deep sleep duration |
+| `light_duration_minutes` | `score.stage_summary.total_light_sleep_time_milli` | milliseconds → minutes | Light sleep duration |
+| `awake_duration_minutes` | `score.stage_summary.total_awake_time_milli` | milliseconds → minutes | Awake time during sleep |
+
+**Meta Fields:**
+- `nap`: "true" or "false" (indicates if this was a nap)
+
+**Example:**
+```swift
+let sleep = try await whoopProvider.fetchSleep()
+for record in sleep {
+    print("Duration: \(record.metrics["sleep_duration_hours"] ?? 0) hours")
+    print("Efficiency: \(record.metrics["sleep_efficiency"] ?? 0)%")
+    print("REM: \(record.metrics["rem_duration_minutes"] ?? 0) minutes")
+    print("Deep: \(record.metrics["deep_duration_minutes"] ?? 0) minutes")
+    print("Is Nap: \(record.meta["nap"] ?? "false")")
+}
+```
+
+#### Workout Metrics
+
+| SDK Metric Name | WHOOP API Field | Unit Conversion | Description |
+|----------------|-----------------|-----------------|-------------|
+| `strain` | `score.strain` | None | Workout strain score |
+| `hr` | `score.average_heart_rate` | None | Average heart rate (bpm) |
+| `max_hr` | `score.max_heart_rate` | None | Maximum heart rate (bpm) |
+| `calories` | `score.kilojoule` | kilojoules → calories | Energy burned (kcal) |
+| `workout_duration_minutes` | Calculated from `start`/`end` | seconds → minutes | Workout duration |
+| `distance` | `score.distance_meter` | None | Distance (meters) |
+| `altitude_gain` | `score.altitude_gain_meter` | None | Altitude gain (meters) |
+
+**Meta Fields:**
+- `workout_type`: Sport/activity name (e.g., "activity", "functional-fitness", "stairmaster")
+- `sport_id`: WHOOP sport ID
+
+**Example:**
+```swift
+let workouts = try await whoopProvider.fetchWorkouts()
+for record in workouts {
+    print("Strain: \(record.metrics["strain"] ?? 0)")
+    print("Avg HR: \(record.metrics["hr"] ?? 0) bpm")
+    print("Calories: \(record.metrics["calories"] ?? 0) kcal")
+    print("Type: \(record.meta["workout_type"] ?? "unknown")")
+}
+```
+
+#### Cycle Metrics
+
+| SDK Metric Name | WHOOP API Field | Description |
+|----------------|-----------------|-------------|
+| `cycle_day` | `day` or `cycle_day` | Day of the cycle |
+| `strain` | `strain` or `score.strain` | Daily strain score |
+| `recovery_score` | `recovery` or `score.recovery_score` | Recovery score |
+
+**Meta Fields:**
+- `cycle_id`: WHOOP cycle ID
+
+**Note:** Cycle endpoint structure may vary. The SDK handles common field variations.
 
 ### Setup Deep Link Handling
 
@@ -703,12 +866,21 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
   - Try a wider date range
   - Check that user has granted necessary permissions
 
+**Problem**: Empty metrics dictionary (data fetched but metrics are empty)
+- **Solution**:
+  - This was fixed in recent updates - the SDK now properly extracts metrics from nested `score` objects
+  - Ensure you're using the latest SDK version
+  - Check that the API response contains a `score` object with nested metrics
+  - Verify the data type matches (recovery, sleep, workout, cycle)
+  - Check console logs for extraction warnings
+
 **Problem**: Data format unexpected
 - **Solution**:
   - Check `WearMetrics` structure - all data is normalized
   - Use `metrics` dictionary for numeric values
   - Use `meta` dictionary for string metadata
   - Check `source` field to identify data origin
+  - WHOOP data uses nested `score` objects - the SDK handles this automatically
 
 #### Network Issues
 
@@ -752,6 +924,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
    ```swift
    // SDK logs warnings for failed data sources
    // Check console output for details
+   // NetworkClient logs raw JSON responses for debugging
    ```
 
 2. **Verify Connection State**:
@@ -762,17 +935,35 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
    }
    ```
 
-3. **Test API Connectivity**:
+3. **Inspect Metrics Extraction**:
+   ```swift
+   let recovery = try await whoopProvider.fetchRecovery()
+   for record in recovery {
+       print("Metrics keys: \(record.metrics.keys)")
+       print("Meta keys: \(record.meta.keys)")
+       print("Source: \(record.source)")
+       print("Timestamp: \(record.timestamp)")
+       
+       // Check if metrics are populated
+       if record.metrics.isEmpty {
+           print("⚠️ Warning: Metrics dictionary is empty")
+           print("This may indicate an extraction issue")
+       }
+   }
+   ```
+
+4. **Test API Connectivity**:
    ```bash
    # Test if service is accessible
    curl https://synheart-wear-service-leatest.onrender.com/health
    ```
 
-4. **Check Swagger Documentation**:
+5. **Check Swagger Documentation**:
    - Visit: https://synheart-wear-service-leatest.onrender.com/swagger/index.html
    - Verify endpoint paths and request/response formats
+   - Review response structure to understand nested `score` objects
 
-5. **Validate Configuration**:
+6. **Validate Configuration**:
    ```swift
    let config = SynheartWearConfig(
        enabledAdapters: [.whoop],
@@ -781,6 +972,14 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
        redirectUri: "yourapp://oauth/callback" // Must match Info.plist
    )
    ```
+
+7. **Debug Raw API Responses**:
+   The SDK logs raw JSON responses to the console when fetching data. Look for:
+   ```
+   [NetworkClient] RAW JSON RESPONSE (Status: 200):
+   [NetworkClient] Full Response Body: {...}
+   ```
+   This helps verify the API response structure and identify extraction issues.
 
 ### Getting Help
 
@@ -793,6 +992,32 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 - **Israel Goytom** - *Initial work* - [@isrugeek](https://github.com/isrugeek)
 - **Synheart AI Team** - *RFC Design & Architecture*
+
+---
+
+## 📝 Recent Updates
+
+### v0.1.1 - Metric Extraction Improvements
+
+**Fixed Issues:**
+- ✅ **Nested Score Object Extraction**: Fixed metric extraction from nested `score` objects in WHOOP API responses
+- ✅ **Unit Conversions**: Properly converts milliseconds to seconds/minutes, kilojoules to calories
+- ✅ **Deep Nesting Support**: Handles deeply nested structures like `score.stage_summary.total_rem_sleep_time_milli`
+- ✅ **Null Value Handling**: Improved handling of null values in API responses
+- ✅ **Enhanced Error Logging**: Added detailed logging of raw JSON responses for debugging
+
+**Improvements:**
+- Recovery metrics now properly extract from `score.recovery_score`, `score.hrv_rmssd_milli`, etc.
+- Sleep metrics extract from `score.sleep_efficiency_percentage` and nested `stage_summary` objects
+- Workout metrics extract from `score.strain`, `score.average_heart_rate`, `score.kilojoule`
+- Timestamp extraction prioritizes `created_at` field (most common in WHOOP API)
+
+**Breaking Changes:**
+- None
+
+**Migration Guide:**
+- No migration needed - all changes are backward compatible
+- Metrics that were previously empty should now be populated correctly
 
 ---
 

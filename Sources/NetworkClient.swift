@@ -149,12 +149,57 @@ internal class NetworkClient {
                     throw NetworkError.invalidResponse
                 }
                 
+                // Log raw JSON response for debugging - BEFORE attempting to decode
+                if let jsonString = String(data: data, encoding: .utf8) {
+                    let separator = String(repeating: "=", count: 80)
+                    print(separator)
+                    print("[NetworkClient] RAW JSON RESPONSE (Status: \(httpResponse.statusCode)):")
+                    print("[NetworkClient] URL: \(request.url?.absoluteString ?? "unknown")")
+                    print("[NetworkClient] Full Response Body:")
+                    print(jsonString)
+                    print(separator)
+                    
+                    // Also try to pretty-print it if possible for easier reading
+                    if let jsonObject = try? JSONSerialization.jsonObject(with: data, options: []),
+                       let prettyData = try? JSONSerialization.data(withJSONObject: jsonObject, options: [.prettyPrinted]),
+                       let prettyString = String(data: prettyData, encoding: .utf8) {
+                        print("[NetworkClient] Pretty-printed JSON:")
+                        print(prettyString)
+                        print(separator)
+                    }
+                }
+                
                 do {
                     return try decoder.decode(T.self, from: data)
+                } catch let decodingError as DecodingError {
+                    // Enhanced error logging with detailed context
+                    var errorContext = "Decoding error: \(decodingError.localizedDescription)"
+                    if let jsonString = String(data: data, encoding: .utf8) {
+                        // Include response body in error for debugging
+                        let preview = jsonString.count > 500 ? String(jsonString.prefix(500)) + "..." : jsonString
+                        errorContext += "\nResponse preview: \(preview)"
+                        
+                        // Try to identify the specific decoding issue
+                        switch decodingError {
+                        case .keyNotFound(let key, let context):
+                            errorContext += "\nMissing key: \(key.stringValue) at path: \(context.codingPath.map { $0.stringValue }.joined(separator: "."))"
+                        case .typeMismatch(let type, let context):
+                            errorContext += "\nType mismatch: expected \(type) at path: \(context.codingPath.map { $0.stringValue }.joined(separator: "."))"
+                        case .valueNotFound(let type, let context):
+                            errorContext += "\nValue not found: expected \(type) at path: \(context.codingPath.map { $0.stringValue }.joined(separator: "."))"
+                        case .dataCorrupted(let context):
+                            errorContext += "\nData corrupted at path: \(context.codingPath.map { $0.stringValue }.joined(separator: ".")) - \(context.debugDescription)"
+                        @unknown default:
+                            break
+                        }
+                    }
+                    print("[NetworkClient] \(errorContext)")
+                    throw NetworkError.decodingError(decodingError)
                 } catch {
                     // Log decoding error for debugging
                     if let jsonString = String(data: data, encoding: .utf8) {
-                        print("Failed to decode response: \(jsonString)")
+                        let preview = jsonString.count > 500 ? String(jsonString.prefix(500)) + "..." : jsonString
+                        print("[NetworkClient] Failed to decode response: \(error.localizedDescription)\nResponse preview: \(preview)")
                     }
                     throw NetworkError.decodingError(error)
                 }
@@ -253,7 +298,22 @@ internal enum NetworkError: LocalizedError {
         case .invalidResponse:
             return "Invalid response from server"
         case .decodingError(let error):
-            return "Failed to decode response: \(error.localizedDescription)"
+            var description = "Failed to decode response: \(error.localizedDescription)"
+            if let decodingError = error as? DecodingError {
+                switch decodingError {
+                case .keyNotFound(let key, let context):
+                    description += ". Missing key '\(key.stringValue)' at path: \(context.codingPath.map { $0.stringValue }.joined(separator: "."))"
+                case .typeMismatch(let type, let context):
+                    description += ". Type mismatch: expected \(type) at path: \(context.codingPath.map { $0.stringValue }.joined(separator: "."))"
+                case .valueNotFound(let type, let context):
+                    description += ". Value not found: expected \(type) at path: \(context.codingPath.map { $0.stringValue }.joined(separator: "."))"
+                case .dataCorrupted(let context):
+                    description += ". Data corrupted: \(context.debugDescription)"
+                @unknown default:
+                    break
+                }
+            }
+            return description
         case .unauthorized:
             return "Authentication failed. Please reconnect your account."
         case .notFound:
