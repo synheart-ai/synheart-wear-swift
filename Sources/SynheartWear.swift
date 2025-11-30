@@ -565,8 +565,29 @@ internal func convertNetworkError(_ error: NetworkError) -> SynheartWearError {
         // The Wear Service should handle refresh automatically, but if it fails,
         // the user needs to reconnect
         return .tokenExpired
-    case .invalidResponse, .decodingError:
+    case .invalidResponse:
         return .invalidResponse
+    case .decodingError(let decodingError):
+        // Preserve detailed decoding error information
+        var errorMessage = "Failed to decode response from server"
+        if let decodingError = decodingError as? DecodingError {
+            switch decodingError {
+            case .keyNotFound(let key, let context):
+                errorMessage += ". Missing required field '\(key.stringValue)' at path: \(context.codingPath.map { $0.stringValue }.joined(separator: "."))"
+            case .typeMismatch(let type, let context):
+                errorMessage += ". Type mismatch: expected \(type) at path: \(context.codingPath.map { $0.stringValue }.joined(separator: "."))"
+            case .valueNotFound(let type, let context):
+                errorMessage += ". Missing value of type \(type) at path: \(context.codingPath.map { $0.stringValue }.joined(separator: "."))"
+            case .dataCorrupted(let context):
+                errorMessage += ". Data corrupted: \(context.debugDescription)"
+            @unknown default:
+                errorMessage += ". \(decodingError.localizedDescription)"
+            }
+        } else {
+            errorMessage += ": \(decodingError.localizedDescription)"
+        }
+        errorMessage += ". The backend may be returning data in a format the SDK doesn't expect."
+        return .apiError(errorMessage)
     case .clientError(let code, let message):
         // 401 is already handled above, but check for other auth-related codes
         if code == 401 {

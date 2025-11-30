@@ -137,3 +137,5 @@ PHASE2_VALIDATION.md
 TESTING_GUIDE.md
 TESTING_APPROACH.md
 
+# Internal workflow docs (ignore entire directory)
+workflow_docs/
