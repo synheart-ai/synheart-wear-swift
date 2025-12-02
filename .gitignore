@@ -127,3 +127,15 @@ Temporary Items
 *.log
 *.swift-version
 
+# Implementation documentation (internal planning docs)
+IMPLEMENTATION_PLAN.md
+IMPLEMENTATION_SUMMARY.md
+IMPLEMENTATION_CHECKLIST.md
+PHASE2_VALIDATION.md
+
+# Testing documentation (internal testing guides)
+TESTING_GUIDE.md
+TESTING_APPROACH.md
+
+# Internal workflow docs (ignore entire directory)
+workflow_docs/
