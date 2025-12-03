@@ -18,6 +18,7 @@ public class SynheartWear {
     
     // Wear Service providers
     private var whoopProvider: WhoopProvider?
+    private var garminProvider: GarminProvider?
 
     /// Initialize SynheartWear with configuration
     ///
@@ -39,6 +40,14 @@ public class SynheartWear {
                     redirectUri: redirectUri
                 )
             }
+            
+            if config.enabledAdapters.contains(.garmin) {
+                self.garminProvider = GarminProvider(
+                    appId: appId,
+                    baseUrl: baseUrl,
+                    redirectUri: redirectUri
+                )
+            }
         }
     }
     
@@ -54,7 +63,12 @@ public class SynheartWear {
                 throw SynheartWearError.apiError("WHOOP provider not configured. Please provide appId in SynheartWearConfig.")
             }
             return provider
-        case .appleHealthKit, .fitbit, .garmin:
+        case .garmin:
+            guard let provider = garminProvider else {
+                throw SynheartWearError.apiError("Garmin provider not configured. Please provide appId in SynheartWearConfig.")
+            }
+            return provider
+        case .appleHealthKit, .fitbit:
             throw SynheartWearError.apiError("Provider for \(adapter) not yet implemented.")
         }
     }
@@ -206,6 +220,34 @@ public class SynheartWear {
                 print("Warning: Failed to read WHOOP metrics: \(error)")
             }
         }
+        
+        // Read from Garmin if connected
+        if config.enabledAdapters.contains(.garmin),
+           let garminProvider = garminProvider,
+           garminProvider.isConnected() {
+            do {
+                // Fetch latest daily summary data (most recent record)
+                let dailiesData = try await garminProvider.fetchDailies(
+                    start: Date().addingTimeInterval(-24 * 60 * 60), // Last 24 hours
+                    end: Date(),
+                    limit: 1
+                )
+                
+                if let latestDaily = dailiesData.first {
+                    allMetrics.append(latestDaily)
+                }
+            } catch SynheartWearError.tokenExpired {
+                // Token expired - mark provider as disconnected but continue
+                print("Warning: Garmin token expired. User needs to reconnect.")
+                // Clear the connection state
+                try? await garminProvider.disconnect()
+            } catch SynheartWearError.notConnected {
+                // Already disconnected - just continue
+            } catch {
+                // Other errors (network, etc.) - log but don't fail
+                print("Warning: Failed to read Garmin metrics: \(error)")
+            }
+        }
 
         // Merge all metrics from different sources
         let mergedMetrics: WearMetrics
@@ -237,11 +279,11 @@ public class SynheartWear {
     
     /// Read metrics from a specific provider
     ///
-    /// Fetches data from a specific wearable provider (e.g., WHOOP) without merging
+    /// Fetches data from a specific wearable provider (e.g., WHOOP, Garmin) without merging
     /// with other sources. Useful for provider-specific data or historical queries.
     ///
     /// - Parameters:
-    ///   - adapter: Device adapter type (e.g., .whoop)
+    ///   - adapter: Device adapter type (e.g., .whoop, .garmin)
     ///   - start: Start date for data range (optional)
     ///   - end: End date for data range (optional)
     ///   - limit: Maximum number of records (optional)
@@ -264,11 +306,19 @@ public class SynheartWear {
                 throw SynheartWearError.notConnected
             }
             return try await whoopProvider.fetchRecovery(start: start, end: end, limit: limit)
+        case .garmin:
+            guard let garminProvider = garminProvider else {
+                throw SynheartWearError.apiError("Garmin provider not configured. Please provide appId in SynheartWearConfig.")
+            }
+            guard garminProvider.isConnected() else {
+                throw SynheartWearError.notConnected
+            }
+            return try await garminProvider.fetchDailies(start: start, end: end, limit: limit)
         case .appleHealthKit:
             // For HealthKit, return current metrics
             let metrics = try await readMetrics()
             return [metrics]
-        case .fitbit, .garmin:
+        case .fitbit:
             throw SynheartWearError.apiError("Provider for \(adapter) not yet implemented.")
         }
     }

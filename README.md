@@ -11,13 +11,14 @@
 
 - **📱 HealthKit Integration**: Native iOS biometric data access from Apple Watch
 - **⌚ Multi-Device Support**: Apple Watch, Fitbit, Garmin, Whoop (via HealthKit sync and cloud APIs)
-- **☁️ Cloud Integration**: Direct API access to WHOOP via Wear Service
+- **☁️ Cloud Integration**: Direct API access to WHOOP and Garmin via Wear Service
 - **🔄 Real-Time Streaming**: Live HR and HRV data streams with Combine framework
 - **📊 Unified Schema**: Consistent data format across all devices
 - **🔒 Privacy-First**: Consent-based data access with encryption
 - **💾 Local Storage**: Encrypted offline data persistence with Keychain
 - **⚡ Swift Concurrency**: Modern async/await API
-- **🔐 OAuth Support**: Secure OAuth 2.0 flow for cloud-based providers
+- **🔐 OAuth Support**: Secure OAuth 2.0 flow for cloud-based providers (WHOOP & Garmin)
+- **📈 Comprehensive Metrics**: Access daily summaries, sleep, HRV, stress, pulse ox, and more from Garmin devices
 
 ## 📦 Installation
 
@@ -27,13 +28,13 @@ Add to your `Package.swift`:
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/synheart-ai/synheart-wear-ios.git", from: "0.1.0")
+    .package(url: "https://github.com/synheart-ai/synheart-wear-swift.git", from: "0.1.0")
 ]
 ```
 
 Or in Xcode:
 1. File → Add Packages...
-2. Enter: `https://github.com/synheart-ai/synheart-wear-ios.git`
+2. Enter: `https://github.com/synheart-ai/synheart-wear-swift.git`
 3. Select version: `0.1.0` or later
 
 ### CocoaPods
@@ -84,17 +85,17 @@ let config = SynheartWearConfig(
 let synheartWear = SynheartWear(config: config)
 ```
 
-**For WHOOP integration:**
+**For WHOOP and Garmin integration:**
 ```swift
 import SynheartWear
 
 let config = SynheartWearConfig(
-    enabledAdapters: [.appleHealthKit, .whoop],
+    enabledAdapters: [.appleHealthKit, .whoop, .garmin],
     enableLocalCaching: true,
     enableEncryption: true,
     streamInterval: 3.0,
     baseUrl: URL(string: "https://synheart-wear-service-leatest.onrender.com")!, // Optional: defaults to production
-    appId: "your-app-id", // Required for WHOOP
+    appId: "your-app-id", // Required for WHOOP and Garmin
     redirectUri: "synheart://oauth/callback" // Optional: defaults to synheart://oauth/callback
 )
 
@@ -743,6 +744,385 @@ let whoopProvider = WhoopProvider(
 - Match the scheme configured in your `Info.plist`
 - Match the redirect URI configured in the Wear Service integration
 - Be registered with WHOOP in their developer portal
+
+## 🏃 Garmin Integration
+
+### Overview
+
+The Garmin provider enables access to comprehensive health and fitness data from Garmin devices via the Wear Service backend. Garmin supports a wide range of metrics including daily summaries, sleep, HRV, stress, pulse ox, and respiration data.
+
+### Setup Deep Link Handling
+
+The Garmin provider uses OAuth flow which requires deep link handling in your app (same configuration as WHOOP).
+
+#### 1. Configure URL Scheme in Info.plist
+
+Add to your `Info.plist` (if not already configured):
+
+```xml
+<key>CFBundleURLTypes</key>
+<array>
+    <dict>
+        <key>CFBundleURLSchemes</key>
+        <array>
+            <string>synheart</string>
+        </array>
+        <key>CFBundleURLName</key>
+        <string>com.yourcompany.synheart</string>
+    </dict>
+</array>
+```
+
+#### 2. Handle Deep Links
+
+**For SwiftUI apps:**
+
+```swift
+import SwiftUI
+
+@main
+struct MyApp: App {
+    var body: some Scene {
+        WindowGroup {
+            ContentView()
+                .onOpenURL { url in
+                    handleDeepLink(url)
+                }
+        }
+    }
+    
+    func handleDeepLink(_ url: URL) {
+        if url.scheme == "synheart" && url.host == "oauth" && url.path == "/callback" {
+            let components = URLComponents(url: url, resolvingAgainstBaseURL: false)
+            let code = components?.queryItems?.first(where: { $0.name == "code" })?.value
+            let state = components?.queryItems?.first(where: { $0.name == "state" })?.value
+            
+            if let code = code, let state = state {
+                // Pass to your provider instance
+                Task {
+                    try? await garminProvider.connectWithCode(
+                        code: code,
+                        state: state,
+                        redirectUri: url.absoluteString
+                    )
+                }
+            }
+        }
+    }
+}
+```
+
+#### 3. Connect to Garmin
+
+**Option 1: Using SynheartWear SDK (Recommended)**
+```swift
+import SynheartWear
+
+// Configure SDK with Garmin support
+let config = SynheartWearConfig(
+    enabledAdapters: [.garmin],
+    appId: "your-app-id",
+    baseUrl: URL(string: "https://synheart-wear-service-leatest.onrender.com")!,
+    redirectUri: "synheart://oauth/callback"
+)
+
+let synheartWear = SynheartWear(config: config)
+
+// Get Garmin provider
+let garminProvider = try synheartWear.getProvider(.garmin) as! GarminProvider
+```
+
+**Option 2: Direct provider initialization**
+```swift
+import SynheartWear
+
+// Initialize Garmin provider directly
+let garminProvider = GarminProvider(
+    appId: "your-app-id",
+    baseUrl: URL(string: "https://synheart-wear-service-leatest.onrender.com")!,
+    redirectUri: "synheart://oauth/callback"
+)
+
+// Start OAuth flow
+Task {
+    do {
+        try await garminProvider.connect()
+        // Browser will open for user authorization
+        // After user approves, deep link will be handled automatically
+    } catch {
+        print("Connection failed: \(error)")
+    }
+}
+
+// Check connection status
+if garminProvider.isConnected() {
+    let userId = garminProvider.getUserId()
+    print("Connected as user: \(userId ?? "unknown")")
+}
+
+// Disconnect
+Task {
+    try? await garminProvider.disconnect()
+}
+```
+
+### Fetching Garmin Data
+
+#### Daily Summaries
+```swift
+Task {
+    do {
+        let dailies = try await garminProvider.fetchDailies(
+            start: Date().addingTimeInterval(-7 * 24 * 60 * 60), // Last 7 days
+            end: Date(),
+            limit: 25
+        )
+        
+        for record in dailies {
+            print("Steps: \(record.metrics["steps"] ?? 0)")
+            print("Calories: \(record.metrics["calories"] ?? 0)")
+            print("Resting HR: \(record.metrics["rhr"] ?? 0)")
+            print("Avg Stress: \(record.metrics["stress"] ?? 0)")
+            print("Date: \(record.meta["calendar_date"] ?? "unknown")")
+        }
+    } catch {
+        print("Failed to fetch dailies: \(error)")
+    }
+}
+```
+
+#### Sleep Data
+```swift
+Task {
+    do {
+        let sleeps = try await garminProvider.fetchSleeps(
+            start: Date().addingTimeInterval(-7 * 24 * 60 * 60), // Last 7 days
+            end: Date(),
+            limit: 25
+        )
+        
+        for record in sleeps {
+            print("Duration: \(record.metrics["sleep_duration_hours"] ?? 0) hours")
+            print("Deep Sleep: \(record.metrics["deep_duration_minutes"] ?? 0) minutes")
+            print("REM Sleep: \(record.metrics["rem_duration_minutes"] ?? 0) minutes")
+            print("Avg SpO2: \(record.metrics["spo2"] ?? 0)%")
+        }
+    } catch {
+        print("Failed to fetch sleep data: \(error)")
+    }
+}
+```
+
+#### HRV Data
+```swift
+Task {
+    do {
+        let hrvData = try await garminProvider.fetchHRV(
+            start: Date().addingTimeInterval(-7 * 24 * 60 * 60),
+            end: Date(),
+            limit: 25
+        )
+        
+        for record in hrvData {
+            print("HRV: \(record.metrics["hrv_rmssd"] ?? 0) ms")
+            print("Status: \(record.meta["hrv_status"] ?? "unknown")")
+        }
+    } catch {
+        print("Failed to fetch HRV data: \(error)")
+    }
+}
+```
+
+#### Stress Data
+```swift
+Task {
+    do {
+        let stressData = try await garminProvider.fetchStressDetails(
+            start: Date().addingTimeInterval(-24 * 60 * 60), // Last 24 hours
+            end: Date(),
+            limit: 100
+        )
+        
+        for record in stressData {
+            print("Stress Level: \(record.metrics["stress"] ?? 0)")
+            print("Body Battery: \(record.metrics["body_battery"] ?? 0)")
+        }
+    } catch {
+        print("Failed to fetch stress data: \(error)")
+    }
+}
+```
+
+#### Pulse Ox (SpO2) Data
+```swift
+Task {
+    do {
+        let pulseOxData = try await garminProvider.fetchPulseOx(
+            start: Date().addingTimeInterval(-7 * 24 * 60 * 60),
+            end: Date()
+        )
+        
+        for record in pulseOxData {
+            print("SpO2: \(record.metrics["spo2"] ?? 0)%")
+        }
+    } catch {
+        print("Failed to fetch pulse ox data: \(error)")
+    }
+}
+```
+
+#### Respiration Data
+```swift
+Task {
+    do {
+        let respirationData = try await garminProvider.fetchRespiration(
+            start: Date().addingTimeInterval(-7 * 24 * 60 * 60),
+            end: Date()
+        )
+        
+        for record in respirationData {
+            print("Respiration Rate: \(record.metrics["respiratory_rate"] ?? 0) breaths/min")
+        }
+    } catch {
+        print("Failed to fetch respiration data: \(error)")
+    }
+}
+```
+
+### Data Extraction & Metric Mapping
+
+#### Daily Summary Metrics
+
+| SDK Metric Name | Garmin API Field | Unit Conversion | Description |
+|----------------|-----------------|-----------------|-------------|
+| `steps` | `steps` or `totalSteps` | None | Total steps |
+| `calories` | `activeKilocalories` | None | Active calories burned (kcal) |
+| `distance` | `distanceInMeters` | None | Distance covered (meters) |
+| `min_hr` | `minHeartRateInBeatsPerMinute` | None | Minimum heart rate (bpm) |
+| `max_hr` | `maxHeartRateInBeatsPerMinute` | None | Maximum heart rate (bpm) |
+| `rhr` | `restingHeartRateInBeatsPerMinute` | None | Resting heart rate (bpm) |
+| `hr` | `restingHeartRateInBeatsPerMinute` | None | Heart rate (same as RHR) |
+| `stress` | `averageStressLevel` | None | Average stress level |
+| `max_stress` | `maxStressLevel` | None | Maximum stress level |
+
+**Meta Fields:**
+- `calendar_date`: Date of the summary (YYYY-MM-DD)
+
+#### Sleep Metrics
+
+| SDK Metric Name | Garmin API Field | Unit Conversion | Description |
+|----------------|-----------------|-----------------|-------------|
+| `sleep_duration_hours` | `durationInSeconds` | seconds → hours | Total sleep duration |
+| `deep_duration_minutes` | `deepSleepDurationInSeconds` | seconds → minutes | Deep sleep duration |
+| `light_duration_minutes` | `lightSleepDurationInSeconds` | seconds → minutes | Light sleep duration |
+| `rem_duration_minutes` | `remSleepInSeconds` | seconds → minutes | REM sleep duration |
+| `awake_duration_minutes` | `awakeDurationInSeconds` | seconds → minutes | Awake time during sleep |
+| `respiratory_rate` | `averageRespirationValue` | None | Average respiration rate |
+| `spo2` | `averageSpO2Value` | None | Average blood oxygen saturation (%) |
+
+**Meta Fields:**
+- `sleep_id`: Garmin sleep summary ID
+
+#### HRV Metrics
+
+| SDK Metric Name | Garmin API Field | Unit Conversion | Description |
+|----------------|-----------------|-----------------|-------------|
+| `hrv_rmssd` | `hrvValue` or `lastNightAvg` | milliseconds → seconds | HRV RMSSD value |
+| `hrv_baseline` | `baselineLowUpper` | None | HRV baseline value |
+
+**Meta Fields:**
+- `hrv_status`: HRV status indicator (e.g., "balanced", "unbalanced")
+
+#### Stress Metrics
+
+| SDK Metric Name | Garmin API Field | Description |
+|----------------|-----------------|-------------|
+| `stress` | `stressLevel` | Stress level |
+| `body_battery` | `bodyBatteryValue` | Body Battery value (0-100) |
+
+#### Pulse Ox Metrics
+
+| SDK Metric Name | Garmin API Field | Description |
+|----------------|-----------------|-------------|
+| `spo2` | `spo2Value` | Blood oxygen saturation (%) |
+
+#### Respiration Metrics
+
+| SDK Metric Name | Garmin API Field | Description |
+|----------------|-----------------|-------------|
+| `respiratory_rate` | `respirationValue` | Respiration rate (breaths/min) |
+
+### Error Handling
+
+The SDK provides comprehensive error handling for Garmin connections:
+
+```swift
+do {
+    let data = try await garminProvider.fetchDailies()
+} catch SynheartWearError.notConnected {
+    // User hasn't connected their account
+    print("Please connect your Garmin account first")
+} catch SynheartWearError.tokenExpired {
+    // Token expired - reconnect
+    print("Session expired. Please reconnect.")
+    try await garminProvider.connect()
+} catch SynheartWearError.authenticationFailed {
+    // Authentication failed
+    print("Authentication failed. Please try again.")
+} catch SynheartWearError.rateLimitExceeded {
+    // Too many requests
+    print("Rate limit exceeded. Please try again later.")
+} catch SynheartWearError.noConnection {
+    // No internet connection
+    print("No internet connection. Please check your network.")
+} catch SynheartWearError.timeout {
+    // Request timed out
+    print("Request timed out. Please try again.")
+} catch SynheartWearError.serverError(let code, let message) {
+    // Server error
+    print("Server error (\(code)): \(message ?? "Unknown error")")
+} catch {
+    // Other errors
+    print("Error: \(error)")
+}
+```
+
+**Graceful Disconnection**: The `disconnect()` method always clears local state, even if the server call fails (e.g., offline):
+
+```swift
+// Disconnect always succeeds locally, even if offline
+try await garminProvider.disconnect()
+// Local state is cleared, connection is removed
+```
+
+### Combining Multiple Providers
+
+You can use both Garmin and WHOOP simultaneously:
+
+```swift
+let config = SynheartWearConfig(
+    enabledAdapters: [.appleHealthKit, .whoop, .garmin],
+    appId: "your-app-id",
+    baseUrl: URL(string: "https://synheart-wear-service-leatest.onrender.com")!,
+    redirectUri: "synheart://oauth/callback"
+)
+
+let synheartWear = SynheartWear(config: config)
+
+// Get providers
+let whoopProvider = try synheartWear.getProvider(.whoop) as! WhoopProvider
+let garminProvider = try synheartWear.getProvider(.garmin) as! GarminProvider
+
+// Connect both
+Task {
+    try await whoopProvider.connect()
+    try await garminProvider.connect()
+}
+
+// Read unified metrics from all sources
+let metrics = try await synheartWear.readMetrics()
+// Automatically merges data from HealthKit + WHOOP + Garmin
+```
 
 ## 📱 SwiftUI Example
 

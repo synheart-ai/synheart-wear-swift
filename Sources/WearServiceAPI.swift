@@ -270,6 +270,357 @@ internal struct WearServiceAPI {
             queryParameters: queryParams
         )
     }
+    
+    // MARK: - Garmin OAuth Endpoints
+    
+    /// Get Garmin OAuth authorization URL
+    ///
+    /// - Parameters:
+    ///   - redirectUri: Deep link URI for OAuth callback
+    ///   - state: State parameter for CSRF protection
+    ///   - appId: Application ID
+    ///   - userId: Optional user ID (defaults to state if not provided)
+    /// - Returns: Authorization URL response
+    func getGarminAuthorizationURL(
+        redirectUri: String,
+        state: String,
+        appId: String,
+        userId: String? = nil
+    ) async throws -> AuthorizationURLResponse {
+        var queryParams: [String: String] = [
+            "redirect_uri": redirectUri,
+            "state": state,
+            "app_id": appId
+        ]
+        
+        if let userId = userId {
+            queryParams["user_id"] = userId
+        }
+        
+        return try await networkClient.get(
+            path: "/v1/garmin/oauth/authorize",
+            queryParameters: queryParams
+        )
+    }
+    
+    /// Exchange Garmin authorization code for access token
+    ///
+    /// - Parameters:
+    ///   - code: Authorization code from OAuth callback
+    ///   - state: State parameter from OAuth callback
+    ///   - redirectUri: Redirect URI used in authorization
+    /// - Returns: OAuth callback response with user_id
+    func exchangeGarminCode(
+        code: String,
+        state: String,
+        redirectUri: String
+    ) async throws -> OAuthCallbackResponse {
+        let body = OAuthCallbackRequest(
+            code: code,
+            state: state,
+            redirectUri: redirectUri
+        )
+        
+        return try await networkClient.post(
+            path: "/v1/garmin/oauth/callback",
+            body: body
+        )
+    }
+    
+    /// Disconnect Garmin user account
+    ///
+    /// - Parameters:
+    ///   - userId: User ID to disconnect
+    ///   - appId: Application ID
+    func disconnectGarmin(userId: String, appId: String) async throws -> DisconnectResponse {
+        let queryParams: [String: String] = [
+            "user_id": userId,
+            "app_id": appId
+        ]
+        
+        return try await networkClient.delete(
+            path: "/v1/garmin/oauth/disconnect",
+            queryParameters: queryParams
+        )
+    }
+    
+    // MARK: - Garmin Data Endpoints
+    
+    /// Fetch Garmin daily summary data
+    ///
+    /// - Parameters:
+    ///   - userId: User ID
+    ///   - appId: Application ID
+    ///   - start: Start date (optional)
+    ///   - end: End date (optional)
+    ///   - limit: Maximum number of records (optional, default: 100)
+    ///   - cursor: Pagination cursor (optional)
+    /// - Returns: Daily summary data response
+    func fetchGarminDailies(
+        userId: String,
+        appId: String,
+        start: Date? = nil,
+        end: Date? = nil,
+        limit: Int? = nil,
+        cursor: String? = nil
+    ) async throws -> DataResponse {
+        var queryParams: [String: String] = [
+            "app_id": appId
+        ]
+        
+        if let start = start {
+            let formatter = ISO8601DateFormatter()
+            queryParams["start"] = formatter.string(from: start)
+        }
+        
+        if let end = end {
+            let formatter = ISO8601DateFormatter()
+            queryParams["end"] = formatter.string(from: end)
+        }
+        
+        if let limit = limit {
+            queryParams["limit"] = String(limit)
+        }
+        
+        if let cursor = cursor {
+            queryParams["cursor"] = cursor
+        }
+        
+        return try await networkClient.get(
+            path: "/v1/garmin/data/\(userId)/dailies",
+            queryParameters: queryParams
+        )
+    }
+    
+    /// Fetch Garmin sleep data
+    ///
+    /// - Parameters:
+    ///   - userId: User ID
+    ///   - appId: Application ID
+    ///   - start: Start date (optional)
+    ///   - end: End date (optional)
+    ///   - limit: Maximum number of records (optional, default: 100)
+    ///   - cursor: Pagination cursor (optional)
+    /// - Returns: Sleep data response
+    func fetchGarminSleeps(
+        userId: String,
+        appId: String,
+        start: Date? = nil,
+        end: Date? = nil,
+        limit: Int? = nil,
+        cursor: String? = nil
+    ) async throws -> DataResponse {
+        var queryParams: [String: String] = [
+            "app_id": appId
+        ]
+        
+        if let start = start {
+            let formatter = ISO8601DateFormatter()
+            queryParams["start"] = formatter.string(from: start)
+        }
+        
+        if let end = end {
+            let formatter = ISO8601DateFormatter()
+            queryParams["end"] = formatter.string(from: end)
+        }
+        
+        if let limit = limit {
+            queryParams["limit"] = String(limit)
+        }
+        
+        if let cursor = cursor {
+            queryParams["cursor"] = cursor
+        }
+        
+        return try await networkClient.get(
+            path: "/v1/garmin/data/\(userId)/sleeps",
+            queryParameters: queryParams
+        )
+    }
+    
+    /// Fetch Garmin HRV data
+    ///
+    /// - Parameters:
+    ///   - userId: User ID
+    ///   - appId: Application ID
+    ///   - start: Start date (optional)
+    ///   - end: End date (optional)
+    ///   - limit: Maximum number of records (optional, default: 100)
+    ///   - cursor: Pagination cursor (optional)
+    /// - Returns: HRV data response
+    func fetchGarminHRV(
+        userId: String,
+        appId: String,
+        start: Date? = nil,
+        end: Date? = nil,
+        limit: Int? = nil,
+        cursor: String? = nil
+    ) async throws -> DataResponse {
+        var queryParams: [String: String] = [
+            "app_id": appId
+        ]
+        
+        if let start = start {
+            let formatter = ISO8601DateFormatter()
+            queryParams["start"] = formatter.string(from: start)
+        }
+        
+        if let end = end {
+            let formatter = ISO8601DateFormatter()
+            queryParams["end"] = formatter.string(from: end)
+        }
+        
+        if let limit = limit {
+            queryParams["limit"] = String(limit)
+        }
+        
+        if let cursor = cursor {
+            queryParams["cursor"] = cursor
+        }
+        
+        return try await networkClient.get(
+            path: "/v1/garmin/data/\(userId)/hrv",
+            queryParameters: queryParams
+        )
+    }
+    
+    /// Fetch Garmin stress details
+    ///
+    /// - Parameters:
+    ///   - userId: User ID
+    ///   - appId: Application ID
+    ///   - start: Start date (optional)
+    ///   - end: End date (optional)
+    ///   - limit: Maximum number of records (optional, default: 100)
+    ///   - cursor: Pagination cursor (optional)
+    /// - Returns: Stress data response
+    func fetchGarminStressDetails(
+        userId: String,
+        appId: String,
+        start: Date? = nil,
+        end: Date? = nil,
+        limit: Int? = nil,
+        cursor: String? = nil
+    ) async throws -> DataResponse {
+        var queryParams: [String: String] = [
+            "app_id": appId
+        ]
+        
+        if let start = start {
+            let formatter = ISO8601DateFormatter()
+            queryParams["start"] = formatter.string(from: start)
+        }
+        
+        if let end = end {
+            let formatter = ISO8601DateFormatter()
+            queryParams["end"] = formatter.string(from: end)
+        }
+        
+        if let limit = limit {
+            queryParams["limit"] = String(limit)
+        }
+        
+        if let cursor = cursor {
+            queryParams["cursor"] = cursor
+        }
+        
+        return try await networkClient.get(
+            path: "/v1/garmin/data/\(userId)/stressDetails",
+            queryParameters: queryParams
+        )
+    }
+    
+    /// Fetch Garmin pulse ox (SpO2) data
+    ///
+    /// - Parameters:
+    ///   - userId: User ID
+    ///   - appId: Application ID
+    ///   - start: Start date (optional)
+    ///   - end: End date (optional)
+    ///   - limit: Maximum number of records (optional, default: 100)
+    ///   - cursor: Pagination cursor (optional)
+    /// - Returns: Pulse ox data response
+    func fetchGarminPulseOx(
+        userId: String,
+        appId: String,
+        start: Date? = nil,
+        end: Date? = nil,
+        limit: Int? = nil,
+        cursor: String? = nil
+    ) async throws -> DataResponse {
+        var queryParams: [String: String] = [
+            "app_id": appId
+        ]
+        
+        if let start = start {
+            let formatter = ISO8601DateFormatter()
+            queryParams["start"] = formatter.string(from: start)
+        }
+        
+        if let end = end {
+            let formatter = ISO8601DateFormatter()
+            queryParams["end"] = formatter.string(from: end)
+        }
+        
+        if let limit = limit {
+            queryParams["limit"] = String(limit)
+        }
+        
+        if let cursor = cursor {
+            queryParams["cursor"] = cursor
+        }
+        
+        return try await networkClient.get(
+            path: "/v1/garmin/data/\(userId)/pulseox",
+            queryParameters: queryParams
+        )
+    }
+    
+    /// Fetch Garmin respiration data
+    ///
+    /// - Parameters:
+    ///   - userId: User ID
+    ///   - appId: Application ID
+    ///   - start: Start date (optional)
+    ///   - end: End date (optional)
+    ///   - limit: Maximum number of records (optional, default: 100)
+    ///   - cursor: Pagination cursor (optional)
+    /// - Returns: Respiration data response
+    func fetchGarminRespiration(
+        userId: String,
+        appId: String,
+        start: Date? = nil,
+        end: Date? = nil,
+        limit: Int? = nil,
+        cursor: String? = nil
+    ) async throws -> DataResponse {
+        var queryParams: [String: String] = [
+            "app_id": appId
+        ]
+        
+        if let start = start {
+            let formatter = ISO8601DateFormatter()
+            queryParams["start"] = formatter.string(from: start)
+        }
+        
+        if let end = end {
+            let formatter = ISO8601DateFormatter()
+            queryParams["end"] = formatter.string(from: end)
+        }
+        
+        if let limit = limit {
+            queryParams["limit"] = String(limit)
+        }
+        
+        if let cursor = cursor {
+            queryParams["cursor"] = cursor
+        }
+        
+        return try await networkClient.get(
+            path: "/v1/garmin/data/\(userId)/respiration",
+            queryParameters: queryParams
+        )
+    }
 }
 
 // MARK: - Request Models
