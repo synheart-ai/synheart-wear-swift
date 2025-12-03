@@ -749,7 +749,21 @@ let whoopProvider = WhoopProvider(
 
 ### Overview
 
-The Garmin provider enables access to comprehensive health and fitness data from Garmin devices via the Wear Service backend. Garmin supports a wide range of metrics including daily summaries, sleep, HRV, stress, pulse ox, and respiration data.
+The Garmin provider enables access to comprehensive health and fitness data from Garmin devices via the Wear Service backend. Garmin supports a wide range of metrics including:
+
+**Available Data Types**:
+- ✅ **Daily Summaries** - Steps, calories, distance, heart rate, stress
+- ✅ **Sleep Data** - Duration, stages (deep, light, REM), SpO2, respiration
+- ✅ **HRV** - Heart rate variability measurements
+- ✅ **Stress Details** - Stress levels and Body Battery
+- ✅ **Pulse Ox** - Blood oxygen saturation (SpO2)
+- ✅ **Respiration** - Breathing rate data
+- ✅ **Blood Pressure** - Systolic, diastolic, pulse readings
+- ✅ **Body Composition** - Weight, BMI, body fat, muscle mass, bone mass
+- ✅ **Activity Epochs** - Short-duration activity summaries
+- ✅ **Health Snapshots** - Combined health metrics snapshots
+- ✅ **Skin Temperature** - Skin temperature measurements
+- ✅ **User Metrics** - VO2 max, fitness age, lactate threshold, FTP
 
 ### Setup Deep Link Handling
 
@@ -989,6 +1003,132 @@ Task {
 }
 ```
 
+#### Blood Pressure Data
+```swift
+Task {
+    do {
+        let bpData = try await garminProvider.fetchBloodPressures(
+            start: Date().addingTimeInterval(-7 * 24 * 60 * 60),
+            end: Date()
+        )
+        
+        for record in bpData {
+            print("Systolic: \(record.metrics["systolic_bp"] ?? 0) mmHg")
+            print("Diastolic: \(record.metrics["diastolic_bp"] ?? 0) mmHg")
+            print("Pulse: \(record.metrics["hr"] ?? 0) bpm")
+            print("Source: \(record.meta["source_type"] ?? "unknown")")
+        }
+    } catch {
+        print("Failed to fetch blood pressure data: \(error)")
+    }
+}
+```
+
+#### Body Composition Data
+```swift
+Task {
+    do {
+        let bodyComps = try await garminProvider.fetchBodyComps(
+            start: Date().addingTimeInterval(-30 * 24 * 60 * 60), // Last 30 days
+            end: Date()
+        )
+        
+        for record in bodyComps {
+            print("Weight: \(record.metrics["weight_kg"] ?? 0) kg")
+            print("BMI: \(record.metrics["bmi"] ?? 0)")
+            print("Body Fat: \(record.metrics["body_fat_percent"] ?? 0)%")
+            print("Muscle Mass: \(record.metrics["muscle_mass_kg"] ?? 0) kg")
+        }
+    } catch {
+        print("Failed to fetch body composition data: \(error)")
+    }
+}
+```
+
+#### Activity Epochs (Summary Data)
+```swift
+Task {
+    do {
+        let epochs = try await garminProvider.fetchEpochs(
+            start: Date().addingTimeInterval(-24 * 60 * 60), // Last 24 hours
+            end: Date(),
+            limit: 100
+        )
+        
+        for record in epochs {
+            print("Steps: \(record.metrics["steps"] ?? 0)")
+            print("Active Calories: \(record.metrics["active_calories"] ?? 0)")
+            print("Intensity: \(record.metrics["intensity"] ?? 0)")
+            print("Duration: \(record.metrics["duration_minutes"] ?? 0) minutes")
+            print("Activity: \(record.meta["activity_type"] ?? "unknown")")
+        }
+    } catch {
+        print("Failed to fetch epochs data: \(error)")
+    }
+}
+```
+
+#### Health Snapshot Data
+```swift
+Task {
+    do {
+        let snapshots = try await garminProvider.fetchHealthSnapshot(
+            start: Date().addingTimeInterval(-7 * 24 * 60 * 60),
+            end: Date()
+        )
+        
+        for record in snapshots {
+            print("Heart Rate: \(record.metrics["hr"] ?? 0) bpm")
+            print("Respiration: \(record.metrics["respiratory_rate"] ?? 0) breaths/min")
+            print("SpO2: \(record.metrics["spo2"] ?? 0)%")
+            print("Stress: \(record.metrics["stress"] ?? 0)")
+            print("Type: \(record.meta["snapshot_type"] ?? "unknown")")
+        }
+    } catch {
+        print("Failed to fetch health snapshot data: \(error)")
+    }
+}
+```
+
+#### Skin Temperature Data
+```swift
+Task {
+    do {
+        let skinTemp = try await garminProvider.fetchSkinTemp(
+            start: Date().addingTimeInterval(-7 * 24 * 60 * 60),
+            end: Date()
+        )
+        
+        for record in skinTemp {
+            print("Skin Temp: \(record.metrics["skin_temp_celsius"] ?? 0)°C")
+        }
+    } catch {
+        print("Failed to fetch skin temperature data: \(error)")
+    }
+}
+```
+
+#### User Metrics (VO2 Max, Fitness Age)
+```swift
+Task {
+    do {
+        let userMetrics = try await garminProvider.fetchUserMetrics(
+            start: Date().addingTimeInterval(-30 * 24 * 60 * 60), // Last 30 days
+            end: Date()
+        )
+        
+        for record in userMetrics {
+            print("VO2 Max: \(record.metrics["vo2_max"] ?? 0)")
+            print("Fitness Age: \(record.metrics["fitness_age"] ?? 0)")
+            print("Lactate Threshold: \(record.metrics["lactate_threshold"] ?? 0)")
+            print("FTP: \(record.metrics["ftp"] ?? 0)")
+        }
+    } catch {
+        print("Failed to fetch user metrics data: \(error)")
+    }
+}
+```
+
 ### Data Extraction & Metric Mapping
 
 #### Daily Summary Metrics
@@ -1051,6 +1191,66 @@ Task {
 | SDK Metric Name | Garmin API Field | Description |
 |----------------|-----------------|-------------|
 | `respiratory_rate` | `respirationValue` | Respiration rate (breaths/min) |
+
+#### Blood Pressure Metrics
+
+| SDK Metric Name | Garmin API Field | Unit | Description |
+|----------------|-----------------|------|-------------|
+| `systolic_bp` | `systolic` | mmHg | Systolic blood pressure |
+| `diastolic_bp` | `diastolic` | mmHg | Diastolic blood pressure |
+| `hr` | `pulse` | bpm | Heart rate during measurement |
+
+**Metadata Fields**: `source_type` (MANUAL or DEVICE)
+
+#### Body Composition Metrics
+
+| SDK Metric Name | Garmin API Field | Unit Conversion | Description |
+|----------------|-----------------|-----------------|-------------|
+| `weight_kg` | `weightInGrams` | ÷ 1000 | Body weight in kilograms |
+| `bmi` | `bmi` | - | Body Mass Index |
+| `body_fat_percent` | `bodyFatPercentage` | - | Body fat percentage |
+| `muscle_mass_kg` | `muscleMassInGrams` | ÷ 1000 | Muscle mass in kilograms |
+| `bone_mass_kg` | `boneMassInGrams` | ÷ 1000 | Bone mass in kilograms |
+| `body_water_percent` | `bodyWaterPercentage` | - | Body water percentage |
+
+#### Epochs (Activity Summary) Metrics
+
+| SDK Metric Name | Garmin API Field | Unit Conversion | Description |
+|----------------|-----------------|-----------------|-------------|
+| `steps` | `steps` | - | Number of steps in epoch |
+| `active_calories` | `activeKilocalories` | - | Active calories burned |
+| `met` | `met` | - | Metabolic equivalent value |
+| `intensity` | `intensity` | - | Activity intensity level |
+| `duration_minutes` | `durationInSeconds` | ÷ 60 | Duration in minutes |
+
+**Metadata Fields**: `activity_type`
+
+#### Health Snapshot Metrics
+
+| SDK Metric Name | Garmin API Field | Description |
+|----------------|-----------------|-------------|
+| `hr` | `heartRate` | Average heart rate during snapshot |
+| `respiratory_rate` | `respirationRate` | Average respiration rate |
+| `spo2` | `spo2` | Average blood oxygen saturation |
+| `stress` | `stressLevel` | Average stress level |
+
+**Metadata Fields**: `snapshot_type`
+
+#### Skin Temperature Metrics
+
+| SDK Metric Name | Garmin API Field | Description |
+|----------------|-----------------|-------------|
+| `skin_temp_celsius` | `skinTempCelsius` | Skin temperature in Celsius |
+| `skin_temp_fahrenheit` | `skinTempFahrenheit` | Skin temperature in Fahrenheit |
+
+#### User Metrics (Fitness Metrics)
+
+| SDK Metric Name | Garmin API Field | Description |
+|----------------|-----------------|-------------|
+| `vo2_max` | `vo2Max` | Maximum oxygen uptake (ml/kg/min) |
+| `fitness_age` | `fitnessAge` | Estimated fitness age |
+| `lactate_threshold` | `lactateThreshold` | Lactate threshold value |
+| `ftp` | `ftp` | Functional Threshold Power (watts) |
 
 ### Error Handling
 

@@ -621,6 +621,282 @@ internal struct WearServiceAPI {
             queryParameters: queryParams
         )
     }
+    
+    /// Fetch Garmin blood pressure data
+    ///
+    /// - Parameters:
+    ///   - userId: User ID
+    ///   - appId: Application ID
+    ///   - start: Start date (optional)
+    ///   - end: End date (optional)
+    ///   - limit: Maximum number of records (optional, default: 100)
+    ///   - cursor: Pagination cursor (optional)
+    /// - Returns: Blood pressure data response
+    func fetchGarminBloodPressures(
+        userId: String,
+        appId: String,
+        start: Date? = nil,
+        end: Date? = nil,
+        limit: Int? = nil,
+        cursor: String? = nil
+    ) async throws -> DataResponse {
+        var queryParams: [String: String] = [
+            "app_id": appId
+        ]
+        
+        if let start = start {
+            let formatter = ISO8601DateFormatter()
+            queryParams["start"] = formatter.string(from: start)
+        }
+        
+        if let end = end {
+            let formatter = ISO8601DateFormatter()
+            queryParams["end"] = formatter.string(from: end)
+        }
+        
+        if let limit = limit {
+            queryParams["limit"] = String(limit)
+        }
+        
+        if let cursor = cursor {
+            queryParams["cursor"] = cursor
+        }
+        
+        return try await networkClient.get(
+            path: "/v1/garmin/data/\(userId)/bloodPressures",
+            queryParameters: queryParams
+        )
+    }
+    
+    /// Fetch Garmin body composition data
+    ///
+    /// - Parameters:
+    ///   - userId: User ID
+    ///   - appId: Application ID
+    ///   - start: Start date (optional)
+    ///   - end: End date (optional)
+    ///   - limit: Maximum number of records (optional, default: 100)
+    ///   - cursor: Pagination cursor (optional)
+    /// - Returns: Body composition data response
+    func fetchGarminBodyComps(
+        userId: String,
+        appId: String,
+        start: Date? = nil,
+        end: Date? = nil,
+        limit: Int? = nil,
+        cursor: String? = nil
+    ) async throws -> DataResponse {
+        var queryParams: [String: String] = [
+            "app_id": appId
+        ]
+        
+        if let start = start {
+            let formatter = ISO8601DateFormatter()
+            queryParams["start"] = formatter.string(from: start)
+        }
+        
+        if let end = end {
+            let formatter = ISO8601DateFormatter()
+            queryParams["end"] = formatter.string(from: end)
+        }
+        
+        if let limit = limit {
+            queryParams["limit"] = String(limit)
+        }
+        
+        if let cursor = cursor {
+            queryParams["cursor"] = cursor
+        }
+        
+        return try await networkClient.get(
+            path: "/v1/garmin/data/\(userId)/bodyComps",
+            queryParameters: queryParams
+        )
+    }
+    
+    /// Fetch Garmin epochs (activity summaries) data
+    ///
+    /// - Parameters:
+    ///   - userId: User ID
+    ///   - appId: Application ID
+    ///   - start: Start date (optional)
+    ///   - end: End date (optional)
+    ///   - limit: Maximum number of records (optional, default: 100)
+    ///   - cursor: Pagination cursor (optional)
+    /// - Returns: Epochs data response
+    func fetchGarminEpochs(
+        userId: String,
+        appId: String,
+        start: Date? = nil,
+        end: Date? = nil,
+        limit: Int? = nil,
+        cursor: String? = nil
+    ) async throws -> DataResponse {
+        var queryParams: [String: String] = [
+            "app_id": appId
+        ]
+        
+        if let start = start {
+            let formatter = ISO8601DateFormatter()
+            queryParams["start"] = formatter.string(from: start)
+        }
+        
+        if let end = end {
+            let formatter = ISO8601DateFormatter()
+            queryParams["end"] = formatter.string(from: end)
+        }
+        
+        if let limit = limit {
+            queryParams["limit"] = String(limit)
+        }
+        
+        if let cursor = cursor {
+            queryParams["cursor"] = cursor
+        }
+        
+        return try await networkClient.get(
+            path: "/v1/garmin/data/\(userId)/epochs",
+            queryParameters: queryParams
+        )
+    }
+    
+    /// Fetch Garmin health snapshot data
+    ///
+    /// - Parameters:
+    ///   - userId: User ID
+    ///   - appId: Application ID
+    ///   - start: Start date (optional)
+    ///   - end: End date (optional)
+    ///   - limit: Maximum number of records (optional, default: 100)
+    ///   - cursor: Pagination cursor (optional)
+    /// - Returns: Health snapshot data response
+    func fetchGarminHealthSnapshot(
+        userId: String,
+        appId: String,
+        start: Date? = nil,
+        end: Date? = nil,
+        limit: Int? = nil,
+        cursor: String? = nil
+    ) async throws -> DataResponse {
+        var queryParams: [String: String] = [
+            "app_id": appId
+        ]
+        
+        if let start = start {
+            let formatter = ISO8601DateFormatter()
+            queryParams["start"] = formatter.string(from: start)
+        }
+        
+        if let end = end {
+            let formatter = ISO8601DateFormatter()
+            queryParams["end"] = formatter.string(from: end)
+        }
+        
+        if let limit = limit {
+            queryParams["limit"] = String(limit)
+        }
+        
+        if let cursor = cursor {
+            queryParams["cursor"] = cursor
+        }
+        
+        return try await networkClient.get(
+            path: "/v1/garmin/data/\(userId)/healthSnapshot",
+            queryParameters: queryParams
+        )
+    }
+    
+    /// Fetch Garmin skin temperature data
+    ///
+    /// - Parameters:
+    ///   - userId: User ID
+    ///   - appId: Application ID
+    ///   - start: Start date (optional)
+    ///   - end: End date (optional)
+    ///   - limit: Maximum number of records (optional, default: 100)
+    ///   - cursor: Pagination cursor (optional)
+    /// - Returns: Skin temperature data response
+    func fetchGarminSkinTemp(
+        userId: String,
+        appId: String,
+        start: Date? = nil,
+        end: Date? = nil,
+        limit: Int? = nil,
+        cursor: String? = nil
+    ) async throws -> DataResponse {
+        var queryParams: [String: String] = [
+            "app_id": appId
+        ]
+        
+        if let start = start {
+            let formatter = ISO8601DateFormatter()
+            queryParams["start"] = formatter.string(from: start)
+        }
+        
+        if let end = end {
+            let formatter = ISO8601DateFormatter()
+            queryParams["end"] = formatter.string(from: end)
+        }
+        
+        if let limit = limit {
+            queryParams["limit"] = String(limit)
+        }
+        
+        if let cursor = cursor {
+            queryParams["cursor"] = cursor
+        }
+        
+        return try await networkClient.get(
+            path: "/v1/garmin/data/\(userId)/skinTemp",
+            queryParameters: queryParams
+        )
+    }
+    
+    /// Fetch Garmin user metrics (VO2 max, fitness age, etc.) data
+    ///
+    /// - Parameters:
+    ///   - userId: User ID
+    ///   - appId: Application ID
+    ///   - start: Start date (optional)
+    ///   - end: End date (optional)
+    ///   - limit: Maximum number of records (optional, default: 100)
+    ///   - cursor: Pagination cursor (optional)
+    /// - Returns: User metrics data response
+    func fetchGarminUserMetrics(
+        userId: String,
+        appId: String,
+        start: Date? = nil,
+        end: Date? = nil,
+        limit: Int? = nil,
+        cursor: String? = nil
+    ) async throws -> DataResponse {
+        var queryParams: [String: String] = [
+            "app_id": appId
+        ]
+        
+        if let start = start {
+            let formatter = ISO8601DateFormatter()
+            queryParams["start"] = formatter.string(from: start)
+        }
+        
+        if let end = end {
+            let formatter = ISO8601DateFormatter()
+            queryParams["end"] = formatter.string(from: end)
+        }
+        
+        if let limit = limit {
+            queryParams["limit"] = String(limit)
+        }
+        
+        if let cursor = cursor {
+            queryParams["cursor"] = cursor
+        }
+        
+        return try await networkClient.get(
+            path: "/v1/garmin/data/\(userId)/userMetrics",
+            queryParameters: queryParams
+        )
+    }
 }
 
 // MARK: - Request Models

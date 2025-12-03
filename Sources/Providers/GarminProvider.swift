@@ -531,6 +531,300 @@ public class GarminProvider: WearableProvider {
         }
     }
     
+    /// Fetch blood pressure data from Garmin
+    ///
+    /// - Parameters:
+    ///   - start: Start date (optional)
+    ///   - end: End date (optional)
+    ///   - limit: Maximum number of records (optional, default: 100)
+    ///   - cursor: Pagination cursor (optional)
+    /// - Returns: Array of blood pressure records as WearMetrics
+    /// - Throws: SynheartWearError if fetch fails
+    public func fetchBloodPressures(
+        start: Date? = nil,
+        end: Date? = nil,
+        limit: Int? = nil,
+        cursor: String? = nil
+    ) async throws -> [WearMetrics] {
+        guard let userId = userId else {
+            throw SynheartWearError.notConnected
+        }
+        
+        do {
+            let response = try await api.fetchGarminBloodPressures(
+                userId: userId,
+                appId: appId,
+                start: start,
+                end: end,
+                limit: limit,
+                cursor: cursor
+            )
+            
+            guard !response.records.isEmpty else {
+                return []
+            }
+            
+            let metrics = convertDataResponseToMetrics(response, dataType: "bloodpressure")
+            
+            let validMetrics = metrics.filter { metric in
+                metric.timestamp.timeIntervalSince1970 > 0
+            }
+            
+            return validMetrics
+        } catch let error as NetworkError {
+            throw convertNetworkError(error)
+        } catch let error as SynheartWearError {
+            throw error
+        } catch {
+            throw SynheartWearError.apiError("Unexpected error: \(error.localizedDescription)")
+        }
+    }
+    
+    /// Fetch body composition data from Garmin
+    ///
+    /// - Parameters:
+    ///   - start: Start date (optional)
+    ///   - end: End date (optional)
+    ///   - limit: Maximum number of records (optional, default: 100)
+    ///   - cursor: Pagination cursor (optional)
+    /// - Returns: Array of body composition records as WearMetrics
+    /// - Throws: SynheartWearError if fetch fails
+    public func fetchBodyComps(
+        start: Date? = nil,
+        end: Date? = nil,
+        limit: Int? = nil,
+        cursor: String? = nil
+    ) async throws -> [WearMetrics] {
+        guard let userId = userId else {
+            throw SynheartWearError.notConnected
+        }
+        
+        do {
+            let response = try await api.fetchGarminBodyComps(
+                userId: userId,
+                appId: appId,
+                start: start,
+                end: end,
+                limit: limit,
+                cursor: cursor
+            )
+            
+            guard !response.records.isEmpty else {
+                return []
+            }
+            
+            let metrics = convertDataResponseToMetrics(response, dataType: "bodycomp")
+            
+            let validMetrics = metrics.filter { metric in
+                metric.timestamp.timeIntervalSince1970 > 0
+            }
+            
+            return validMetrics
+        } catch let error as NetworkError {
+            throw convertNetworkError(error)
+        } catch let error as SynheartWearError {
+            throw error
+        } catch {
+            throw SynheartWearError.apiError("Unexpected error: \(error.localizedDescription)")
+        }
+    }
+    
+    /// Fetch epoch (activity summary) data from Garmin
+    ///
+    /// - Parameters:
+    ///   - start: Start date (optional)
+    ///   - end: End date (optional)
+    ///   - limit: Maximum number of records (optional, default: 100)
+    ///   - cursor: Pagination cursor (optional)
+    /// - Returns: Array of epoch records as WearMetrics
+    /// - Throws: SynheartWearError if fetch fails
+    public func fetchEpochs(
+        start: Date? = nil,
+        end: Date? = nil,
+        limit: Int? = nil,
+        cursor: String? = nil
+    ) async throws -> [WearMetrics] {
+        guard let userId = userId else {
+            throw SynheartWearError.notConnected
+        }
+        
+        do {
+            let response = try await api.fetchGarminEpochs(
+                userId: userId,
+                appId: appId,
+                start: start,
+                end: end,
+                limit: limit,
+                cursor: cursor
+            )
+            
+            guard !response.records.isEmpty else {
+                return []
+            }
+            
+            let metrics = convertDataResponseToMetrics(response, dataType: "epochs")
+            
+            let validMetrics = metrics.filter { metric in
+                metric.timestamp.timeIntervalSince1970 > 0
+            }
+            
+            return validMetrics
+        } catch let error as NetworkError {
+            throw convertNetworkError(error)
+        } catch let error as SynheartWearError {
+            throw error
+        } catch {
+            throw SynheartWearError.apiError("Unexpected error: \(error.localizedDescription)")
+        }
+    }
+    
+    /// Fetch health snapshot data from Garmin
+    ///
+    /// - Parameters:
+    ///   - start: Start date (optional)
+    ///   - end: End date (optional)
+    ///   - limit: Maximum number of records (optional, default: 100)
+    ///   - cursor: Pagination cursor (optional)
+    /// - Returns: Array of health snapshot records as WearMetrics
+    /// - Throws: SynheartWearError if fetch fails
+    public func fetchHealthSnapshot(
+        start: Date? = nil,
+        end: Date? = nil,
+        limit: Int? = nil,
+        cursor: String? = nil
+    ) async throws -> [WearMetrics] {
+        guard let userId = userId else {
+            throw SynheartWearError.notConnected
+        }
+        
+        do {
+            let response = try await api.fetchGarminHealthSnapshot(
+                userId: userId,
+                appId: appId,
+                start: start,
+                end: end,
+                limit: limit,
+                cursor: cursor
+            )
+            
+            guard !response.records.isEmpty else {
+                return []
+            }
+            
+            let metrics = convertDataResponseToMetrics(response, dataType: "healthsnapshot")
+            
+            let validMetrics = metrics.filter { metric in
+                metric.timestamp.timeIntervalSince1970 > 0
+            }
+            
+            return validMetrics
+        } catch let error as NetworkError {
+            throw convertNetworkError(error)
+        } catch let error as SynheartWearError {
+            throw error
+        } catch {
+            throw SynheartWearError.apiError("Unexpected error: \(error.localizedDescription)")
+        }
+    }
+    
+    /// Fetch skin temperature data from Garmin
+    ///
+    /// - Parameters:
+    ///   - start: Start date (optional)
+    ///   - end: End date (optional)
+    ///   - limit: Maximum number of records (optional, default: 100)
+    ///   - cursor: Pagination cursor (optional)
+    /// - Returns: Array of skin temperature records as WearMetrics
+    /// - Throws: SynheartWearError if fetch fails
+    public func fetchSkinTemp(
+        start: Date? = nil,
+        end: Date? = nil,
+        limit: Int? = nil,
+        cursor: String? = nil
+    ) async throws -> [WearMetrics] {
+        guard let userId = userId else {
+            throw SynheartWearError.notConnected
+        }
+        
+        do {
+            let response = try await api.fetchGarminSkinTemp(
+                userId: userId,
+                appId: appId,
+                start: start,
+                end: end,
+                limit: limit,
+                cursor: cursor
+            )
+            
+            guard !response.records.isEmpty else {
+                return []
+            }
+            
+            let metrics = convertDataResponseToMetrics(response, dataType: "skintemp")
+            
+            let validMetrics = metrics.filter { metric in
+                metric.timestamp.timeIntervalSince1970 > 0
+            }
+            
+            return validMetrics
+        } catch let error as NetworkError {
+            throw convertNetworkError(error)
+        } catch let error as SynheartWearError {
+            throw error
+        } catch {
+            throw SynheartWearError.apiError("Unexpected error: \(error.localizedDescription)")
+        }
+    }
+    
+    /// Fetch user metrics (VO2 max, fitness age, etc.) data from Garmin
+    ///
+    /// - Parameters:
+    ///   - start: Start date (optional)
+    ///   - end: End date (optional)
+    ///   - limit: Maximum number of records (optional, default: 100)
+    ///   - cursor: Pagination cursor (optional)
+    /// - Returns: Array of user metrics records as WearMetrics
+    /// - Throws: SynheartWearError if fetch fails
+    public func fetchUserMetrics(
+        start: Date? = nil,
+        end: Date? = nil,
+        limit: Int? = nil,
+        cursor: String? = nil
+    ) async throws -> [WearMetrics] {
+        guard let userId = userId else {
+            throw SynheartWearError.notConnected
+        }
+        
+        do {
+            let response = try await api.fetchGarminUserMetrics(
+                userId: userId,
+                appId: appId,
+                start: start,
+                end: end,
+                limit: limit,
+                cursor: cursor
+            )
+            
+            guard !response.records.isEmpty else {
+                return []
+            }
+            
+            let metrics = convertDataResponseToMetrics(response, dataType: "usermetrics")
+            
+            let validMetrics = metrics.filter { metric in
+                metric.timestamp.timeIntervalSince1970 > 0
+            }
+            
+            return validMetrics
+        } catch let error as NetworkError {
+            throw convertNetworkError(error)
+        } catch let error as SynheartWearError {
+            throw error
+        } catch {
+            throw SynheartWearError.apiError("Unexpected error: \(error.localizedDescription)")
+        }
+    }
+    
     // MARK: - Private Methods
     
     /// Convert DataResponse from API to array of WearMetrics
@@ -582,6 +876,18 @@ public class GarminProvider: WearableProvider {
             extractPulseOxMetrics(from: data, into: &metrics, meta: &meta)
         case "respiration":
             extractRespirationMetrics(from: data, into: &metrics, meta: &meta)
+        case "bloodpressure":
+            extractBloodPressureMetrics(from: data, into: &metrics, meta: &meta)
+        case "bodycomp":
+            extractBodyCompMetrics(from: data, into: &metrics, meta: &meta)
+        case "epochs":
+            extractEpochsMetrics(from: data, into: &metrics, meta: &meta)
+        case "healthsnapshot":
+            extractHealthSnapshotMetrics(from: data, into: &metrics, meta: &meta)
+        case "skintemp":
+            extractSkinTempMetrics(from: data, into: &metrics, meta: &meta)
+        case "usermetrics":
+            extractUserMetricsMetrics(from: data, into: &metrics, meta: &meta)
         default:
             extractGenericMetrics(from: data, into: &metrics, meta: &meta)
         }
@@ -786,6 +1092,159 @@ public class GarminProvider: WearableProvider {
         // Respiration rate
         if let respRate = extractDouble(from: data, keys: ["respirationValue", "respiration"]) {
             metrics["respiratory_rate"] = respRate
+        }
+    }
+    
+    /// Extract blood pressure-specific metrics
+    private func extractBloodPressureMetrics(from data: [String: AnyCodable], into metrics: inout [String: Double], meta: inout [String: String]) {
+        // Systolic blood pressure
+        if let systolic = extractDouble(from: data, keys: ["systolic", "systolicBloodPressure"]) {
+            metrics["systolic_bp"] = systolic
+        }
+        
+        // Diastolic blood pressure
+        if let diastolic = extractDouble(from: data, keys: ["diastolic", "diastolicBloodPressure"]) {
+            metrics["diastolic_bp"] = diastolic
+        }
+        
+        // Pulse (heart rate during measurement)
+        if let pulse = extractDouble(from: data, keys: ["pulse", "pulseRate"]) {
+            metrics["hr"] = pulse
+        }
+        
+        // Source type (manual vs device)
+        if let sourceType = extractString(from: data, keys: ["sourceType", "measurementSource"]) {
+            meta["source_type"] = sourceType
+        }
+    }
+    
+    /// Extract body composition-specific metrics
+    private func extractBodyCompMetrics(from data: [String: AnyCodable], into metrics: inout [String: Double], meta: inout [String: String]) {
+        // Weight
+        if let weight = extractDouble(from: data, keys: ["weight", "weightInGrams"]) {
+            metrics["weight_kg"] = weight / 1000.0  // Convert grams to kg
+        }
+        
+        // Body Mass Index
+        if let bmi = extractDouble(from: data, keys: ["bmi", "bodyMassIndex"]) {
+            metrics["bmi"] = bmi
+        }
+        
+        // Body fat percentage
+        if let bodyFat = extractDouble(from: data, keys: ["bodyFat", "bodyFatPercentage"]) {
+            metrics["body_fat_percent"] = bodyFat
+        }
+        
+        // Muscle mass
+        if let muscleMass = extractDouble(from: data, keys: ["muscleMass", "muscleMassInGrams"]) {
+            metrics["muscle_mass_kg"] = muscleMass / 1000.0  // Convert grams to kg
+        }
+        
+        // Bone mass
+        if let boneMass = extractDouble(from: data, keys: ["boneMass", "boneMassInGrams"]) {
+            metrics["bone_mass_kg"] = boneMass / 1000.0  // Convert grams to kg
+        }
+        
+        // Body water percentage
+        if let bodyWater = extractDouble(from: data, keys: ["bodyWater", "bodyWaterPercentage"]) {
+            metrics["body_water_percent"] = bodyWater
+        }
+    }
+    
+    /// Extract epochs (activity summary)-specific metrics
+    private func extractEpochsMetrics(from data: [String: AnyCodable], into metrics: inout [String: Double], meta: inout [String: String]) {
+        // Steps
+        if let steps = extractDouble(from: data, keys: ["steps", "totalSteps"]) {
+            metrics["steps"] = steps
+        }
+        
+        // Active calories
+        if let activeCalories = extractDouble(from: data, keys: ["activeKilocalories", "activeCalories"]) {
+            metrics["active_calories"] = activeCalories
+        }
+        
+        // Met value (metabolic equivalent)
+        if let met = extractDouble(from: data, keys: ["met", "metValue"]) {
+            metrics["met"] = met
+        }
+        
+        // Intensity level
+        if let intensity = extractDouble(from: data, keys: ["intensity", "intensityLevel"]) {
+            metrics["intensity"] = intensity
+        }
+        
+        // Duration in seconds
+        if let duration = extractDouble(from: data, keys: ["duration", "durationInSeconds"]) {
+            metrics["duration_minutes"] = duration / 60.0
+        }
+        
+        // Activity type
+        if let activityType = extractString(from: data, keys: ["activityType"]) {
+            meta["activity_type"] = activityType
+        }
+    }
+    
+    /// Extract health snapshot-specific metrics
+    private func extractHealthSnapshotMetrics(from data: [String: AnyCodable], into metrics: inout [String: Double], meta: inout [String: String]) {
+        // Heart rate
+        if let hr = extractDouble(from: data, keys: ["heartRate", "avgHeartRate"]) {
+            metrics["hr"] = hr
+        }
+        
+        // Respiration rate
+        if let respRate = extractDouble(from: data, keys: ["respirationRate", "avgRespirationRate"]) {
+            metrics["respiratory_rate"] = respRate
+        }
+        
+        // SpO2
+        if let spo2 = extractDouble(from: data, keys: ["spo2", "avgSpO2"]) {
+            metrics["spo2"] = spo2
+        }
+        
+        // Stress level
+        if let stress = extractDouble(from: data, keys: ["stressLevel", "avgStress"]) {
+            metrics["stress"] = stress
+        }
+        
+        // Snapshot type
+        if let snapshotType = extractString(from: data, keys: ["snapshotType"]) {
+            meta["snapshot_type"] = snapshotType
+        }
+    }
+    
+    /// Extract skin temperature-specific metrics
+    private func extractSkinTempMetrics(from data: [String: AnyCodable], into metrics: inout [String: Double], meta: inout [String: String]) {
+        // Skin temperature in Celsius
+        if let skinTemp = extractDouble(from: data, keys: ["skinTempCelsius", "skinTemperature", "temperature"]) {
+            metrics["skin_temp_celsius"] = skinTemp
+        }
+        
+        // Skin temperature in Fahrenheit
+        if let skinTempF = extractDouble(from: data, keys: ["skinTempFahrenheit"]) {
+            metrics["skin_temp_fahrenheit"] = skinTempF
+        }
+    }
+    
+    /// Extract user metrics (VO2 max, fitness age, etc.)-specific metrics
+    private func extractUserMetricsMetrics(from data: [String: AnyCodable], into metrics: inout [String: Double], meta: inout [String: String]) {
+        // VO2 Max
+        if let vo2max = extractDouble(from: data, keys: ["vo2Max", "vo2MaxValue"]) {
+            metrics["vo2_max"] = vo2max
+        }
+        
+        // Fitness age
+        if let fitnessAge = extractDouble(from: data, keys: ["fitnessAge"]) {
+            metrics["fitness_age"] = fitnessAge
+        }
+        
+        // Lactate threshold
+        if let lactateThreshold = extractDouble(from: data, keys: ["lactateThreshold", "lactateThresholdValue"]) {
+            metrics["lactate_threshold"] = lactateThreshold
+        }
+        
+        // FTP (Functional Threshold Power)
+        if let ftp = extractDouble(from: data, keys: ["ftp", "functionalThresholdPower"]) {
+            metrics["ftp"] = ftp
         }
     }
     
