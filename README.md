@@ -134,6 +134,7 @@ Task {
 Task {
     do {
         // Automatically merges data from HealthKit + WHOOP (if connected)
+        // Only returns data that is fresh (within 24 hours) and valid
         let metrics = try await synheartWear.readMetrics()
 
         print("Heart Rate: \(metrics.getMetric(.hr) ?? 0) bpm")
@@ -141,11 +142,16 @@ Task {
         print("Steps: \(metrics.getMetric(.steps) ?? 0)")
         print("Recovery Score: \(metrics.metrics["recovery_score"] ?? 0)")
         print("Source: \(metrics.source)") // e.g., "merged_apple_healthkit" or "whoop_recovery"
+    } catch SynheartWearError.noWearableData {
+        // No fresh data available - device may not be connected or syncing
+        print("No wearable data available. Please check if your device is connected and syncing.")
     } catch {
         print("Failed to read metrics: \(error)")
     }
 }
 ```
+
+**Note**: The SDK automatically validates data freshness (24-hour threshold) and returns partial data when available. Errors are only thrown when ALL data is null/empty or stale.
 
 **Provider-specific metrics:**
 ```swift
@@ -165,6 +171,47 @@ Task {
     } catch {
         print("Failed to read WHOOP data: \(error)")
     }
+}
+```
+
+### 4.1 Data Freshness Validation
+
+The SDK automatically validates that all data is fresh (within 24 hours) for both local HealthKit data and cloud provider data:
+
+**Key Features:**
+- ✅ **24-Hour Freshness Check**: All data must be within 24 hours to be considered valid
+- ✅ **Partial Data Support**: Returns data even if some metrics are missing (e.g., has HR but no steps)
+- ✅ **Smart Error Handling**: Only throws `noWearableData` when ALL data is null/empty or ALL records are stale
+- ✅ **Automatic Filtering**: Stale data is automatically filtered out before returning
+
+**For HealthKit:**
+- Validates sample timestamps when reading from HealthKit
+- Checks data availability before reading
+- Returns partial metrics if some are available (e.g., heart rate but no steps)
+
+**For Cloud Providers (WHOOP, Garmin):**
+- Validates timestamp of fetched records (24-hour threshold)
+- Filters out stale records automatically
+- Returns fresh records with partial data when available
+
+**Example:**
+```swift
+do {
+    // This will only return data that is fresh (within 24 hours)
+    let metrics = try await synheartWear.readMetrics()
+    
+    // Partial data is OK - you might get HR but not steps
+    if let hr = metrics.getMetric(.hr) {
+        print("Heart Rate: \(hr) bpm") // Available
+    }
+    
+    if let steps = metrics.getMetric(.steps) {
+        print("Steps: \(steps)") // May be nil if not available
+    }
+} catch SynheartWearError.noWearableData {
+    // This only throws when ALL data is stale or empty
+    // If you have partial data (e.g., HR but no steps), it still returns successfully
+    print("No fresh wearable data available")
 }
 ```
 
@@ -703,6 +750,10 @@ do {
 } catch SynheartWearError.authenticationFailed {
     // Authentication failed
     print("Authentication failed. Please try again.")
+} catch SynheartWearError.noWearableData {
+    // No fresh data available (all data is stale or empty)
+    // This only throws when ALL records have ALL metrics as null/empty, or all records are stale (>24h)
+    print("No wearable data available. Please check if your wearable device is connected and syncing data.")
 } catch SynheartWearError.rateLimitExceeded {
     // Too many requests
     print("Rate limit exceeded. Please try again later.")
@@ -720,6 +771,8 @@ do {
     print("Error: \(error)")
 }
 ```
+
+**Data Freshness Validation**: The SDK automatically validates that all data is fresh (within 24 hours). Stale data is filtered out, and partial data is returned when available. The `noWearableData` error is only thrown when ALL data is null/empty or ALL records are stale.
 
 **Graceful Disconnection**: The `disconnect()` method always clears local state, even if the server call fails (e.g., offline):
 
@@ -1269,6 +1322,10 @@ do {
 } catch SynheartWearError.authenticationFailed {
     // Authentication failed
     print("Authentication failed. Please try again.")
+} catch SynheartWearError.noWearableData {
+    // No fresh data available (all data is stale or empty)
+    // This only throws when ALL records have ALL metrics as null/empty, or all records are stale (>24h)
+    print("No wearable data available. Please check if your wearable device is connected and syncing data.")
 } catch SynheartWearError.rateLimitExceeded {
     // Too many requests
     print("Rate limit exceeded. Please try again later.")
@@ -1286,6 +1343,8 @@ do {
     print("Error: \(error)")
 }
 ```
+
+**Data Freshness Validation**: The SDK automatically validates that all data is fresh (within 24 hours). Stale data is filtered out, and partial data is returned when available. The `noWearableData` error is only thrown when ALL data is null/empty or ALL records are stale.
 
 **Graceful Disconnection**: The `disconnect()` method always clears local state, even if the server call fails (e.g., offline):
 
@@ -1604,3 +1663,9 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 **Made with ❤️ by the Synheart AI Team**
 
 *Technology with a heartbeat.*
+
+## Patent Pending Notice
+
+This project is provided under an open-source license. Certain underlying systems, methods, and architectures described or implemented herein may be covered by one or more pending patent applications.
+
+Nothing in this repository grants any license, express or implied, to any patents or patent applications, except as provided by the applicable open-source license.
