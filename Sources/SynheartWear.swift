@@ -19,6 +19,9 @@ public class SynheartWear {
     // Wear Service providers
     private var whoopProvider: WhoopProvider?
     private var garminProvider: GarminProvider?
+    
+    /// Maximum age for data to be considered fresh (24 hours)
+    private static let maxStaleAge: TimeInterval = 24 * 60 * 60
 
     /// Initialize SynheartWear with configuration
     ///
@@ -161,35 +164,46 @@ public class SynheartWear {
     ///
     /// - Parameter isRealTime: Whether to read real-time data or historical snapshot
     /// - Returns: Unified WearMetrics containing all available biometric data from all sources
-    /// - Throws: SynheartWearError if metrics cannot be read
+    /// - Throws: SynheartWearError if metrics cannot be read (only when ALL data is null/empty or stale)
     public func readMetrics(isRealTime: Bool = false) async throws -> WearMetrics {
         try ensureInitialized()
 
         var allMetrics: [WearMetrics] = []
+        var healthKitMetrics: [String: Double] = [:]
 
         // Read from HealthKit if enabled
         if config.enabledAdapters.contains(.appleHealthKit) {
+            // Try to read heart rate (partial data is OK)
             do {
                 let heartRate = try await readHeartRate(isRealTime: isRealTime)
+                healthKitMetrics["hr"] = heartRate
+            } catch {
+                // Log but don't fail - continue with other metrics
+                print("Warning: Failed to read HealthKit heart rate: \(error)")
+            }
+            
+            // Try to read steps (partial data is OK)
+            do {
                 let steps = try await readSteps()
-
-                let healthKitMetrics = WearMetrics(
+                healthKitMetrics["steps"] = steps
+            } catch {
+                // Log but don't fail - continue with other metrics
+                print("Warning: Failed to read HealthKit steps: \(error)")
+            }
+            
+            // Only add HealthKit metrics if we have at least one valid metric
+            if !healthKitMetrics.isEmpty && hasValidMetrics(healthKitMetrics) {
+                let healthKitWearMetrics = WearMetrics(
                     timestamp: Date(),
                     deviceId: "applewatch_\(UUID().uuidString.prefix(8))",
                     source: "apple_healthkit",
-                    metrics: [
-                        "hr": heartRate,
-                        "steps": steps
-                    ],
+                    metrics: healthKitMetrics,
                     meta: [
                         "synced": "true"
                     ],
                     rrIntervals: nil
                 )
-                allMetrics.append(healthKitMetrics)
-            } catch {
-                // Log but don't fail - continue with other sources
-                print("Warning: Failed to read HealthKit metrics: \(error)")
+                allMetrics.append(healthKitWearMetrics)
             }
         }
 
@@ -200,12 +214,14 @@ public class SynheartWear {
             do {
                 // Fetch latest recovery data (most recent record)
                 let recoveryData = try await whoopProvider.fetchRecovery(
-                    start: Date().addingTimeInterval(-24 * 60 * 60), // Last 24 hours
+                    start: Date().addingTimeInterval(-Self.maxStaleAge), // Last 24 hours
                     end: Date(),
                     limit: 1
                 )
                 
-                if let latestRecovery = recoveryData.first {
+                // Filter for fresh, valid metrics
+                let freshRecoveryData = filterFreshValidMetrics(recoveryData)
+                if let latestRecovery = freshRecoveryData.first {
                     allMetrics.append(latestRecovery)
                 }
             } catch SynheartWearError.tokenExpired {
@@ -228,12 +244,14 @@ public class SynheartWear {
             do {
                 // Fetch latest daily summary data (most recent record)
                 let dailiesData = try await garminProvider.fetchDailies(
-                    start: Date().addingTimeInterval(-24 * 60 * 60), // Last 24 hours
+                    start: Date().addingTimeInterval(-Self.maxStaleAge), // Last 24 hours
                     end: Date(),
                     limit: 1
                 )
                 
-                if let latestDaily = dailiesData.first {
+                // Filter for fresh, valid metrics
+                let freshDailiesData = filterFreshValidMetrics(dailiesData)
+                if let latestDaily = freshDailiesData.first {
                     allMetrics.append(latestDaily)
                 }
             } catch SynheartWearError.tokenExpired {
@@ -249,24 +267,25 @@ public class SynheartWear {
             }
         }
 
+        // Filter all metrics for freshness and validity
+        let freshValidMetrics = filterFreshValidMetrics(allMetrics)
+        
+        // Only throw error if ALL data is null/empty or stale
+        if allMetricsStaleOrEmpty(freshValidMetrics) {
+            throw SynheartWearError.noWearableData
+        }
+
         // Merge all metrics from different sources
         let mergedMetrics: WearMetrics
-        if allMetrics.isEmpty {
-            // No data available from any source
-            mergedMetrics = WearMetrics(
-                timestamp: Date(),
-                deviceId: "unknown",
-                source: "none",
-                metrics: [:],
-                meta: ["error": "No data sources available"],
-                rrIntervals: nil
-            )
-        } else if allMetrics.count == 1 {
+        if freshValidMetrics.isEmpty {
+            // This should not happen due to check above, but handle gracefully
+            throw SynheartWearError.noWearableData
+        } else if freshValidMetrics.count == 1 {
             // Only one source available
-            mergedMetrics = allMetrics[0]
+            mergedMetrics = freshValidMetrics[0]
         } else {
             // Multiple sources - merge them
-            mergedMetrics = normalizer.mergeSnapshots(allMetrics)
+            mergedMetrics = normalizer.mergeSnapshots(freshValidMetrics)
         }
 
         // Cache if enabled
@@ -411,6 +430,37 @@ public class SynheartWear {
     }
 
     // MARK: - Private Methods
+    
+    /// Check if a timestamp is fresh (within maxStaleAge)
+    private func isFresh(_ timestamp: Date) -> Bool {
+        let age = Date().timeIntervalSince(timestamp)
+        return age <= Self.maxStaleAge
+    }
+    
+    /// Check if metrics dictionary has any valid (non-zero, non-null) values
+    private func hasValidMetrics(_ metrics: [String: Double]) -> Bool {
+        return !metrics.isEmpty && metrics.values.contains { $0 > 0 }
+    }
+    
+    /// Check if WearMetrics has any valid data
+    private func hasValidData(_ metrics: WearMetrics) -> Bool {
+        return hasValidMetrics(metrics.metrics) && isFresh(metrics.timestamp)
+    }
+    
+    /// Filter and validate WearMetrics array, returning only fresh records with valid data
+    private func filterFreshValidMetrics(_ metrics: [WearMetrics]) -> [WearMetrics] {
+        return metrics.filter { hasValidData($0) }
+    }
+    
+    /// Check if all metrics in an array are stale or empty
+    private func allMetricsStaleOrEmpty(_ metrics: [WearMetrics]) -> Bool {
+        if metrics.isEmpty {
+            return true
+        }
+        return metrics.allSatisfy { metric in
+            !isFresh(metric.timestamp) || !hasValidMetrics(metric.metrics)
+        }
+    }
 
     private func createMetricsPublisher(from publisher: Publishers.Autoconnect<Timer.TimerPublisher>) -> AnyPublisher<WearMetrics, Error> {
         if #available(iOS 14.0, *) {
@@ -467,6 +517,12 @@ public class SynheartWear {
         guard let heartRateType = HKQuantityType.quantityType(forIdentifier: .heartRate) else {
             throw SynheartWearError.healthKitTypeNotAvailable
         }
+        
+        // Check data availability
+        let authorizationStatus = healthStore.authorizationStatus(for: heartRateType)
+        guard authorizationStatus == .sharingAuthorized else {
+            throw SynheartWearError.noWearableData
+        }
 
         let predicate = HKQuery.predicateForSamples(
             withStart: Date().addingTimeInterval(isRealTime ? -60 : -3600),
@@ -487,12 +543,26 @@ public class SynheartWear {
                 }
                 
                 guard let sample = samples?.first as? HKQuantitySample else {
-                    continuation.resume(throwing: SynheartWearError.invalidData)
+                    continuation.resume(throwing: SynheartWearError.noWearableData)
+                    return
+                }
+                
+                // Check freshness - sample end date should be within 24 hours
+                let sampleDate = sample.endDate
+                guard self.isFresh(sampleDate) else {
+                    continuation.resume(throwing: SynheartWearError.noWearableData)
                     return
                 }
                 
                 let heartRateUnit = HKUnit.count().unitDivided(by: HKUnit.minute())
                 let heartRate = sample.quantity.doubleValue(for: heartRateUnit)
+                
+                // Validate that heart rate is a valid value (greater than 0)
+                guard heartRate > 0 else {
+                    continuation.resume(throwing: SynheartWearError.noWearableData)
+                    return
+                }
+                
                 continuation.resume(returning: heartRate)
             }
             
@@ -504,9 +574,15 @@ public class SynheartWear {
         guard let stepCountType = HKQuantityType.quantityType(forIdentifier: .stepCount) else {
             throw SynheartWearError.healthKitTypeNotAvailable
         }
+        
+        // Check data availability
+        let authorizationStatus = healthStore.authorizationStatus(for: stepCountType)
+        guard authorizationStatus == .sharingAuthorized else {
+            throw SynheartWearError.noWearableData
+        }
 
         let predicate = HKQuery.predicateForSamples(
-            withStart: Date().addingTimeInterval(-24 * 60 * 60), // Last 24 hours
+            withStart: Date().addingTimeInterval(-Self.maxStaleAge), // Last 24 hours
             end: Date(),
             options: .strictEndDate
         )
@@ -523,11 +599,18 @@ public class SynheartWear {
                 }
                 
                 guard let sum = statistics?.sumQuantity() else {
-                    continuation.resume(returning: 0.0)
+                    // No data available - check if we have any samples at all
+                    // If no samples in the last 24 hours, throw noWearableData
+                    continuation.resume(throwing: SynheartWearError.noWearableData)
                     return
                 }
                 
                 let steps = sum.doubleValue(for: HKUnit.count())
+                
+                // Validate that steps is a valid value (greater than or equal to 0)
+                // Note: 0 steps is valid data, but we need to ensure we have recent data
+                // The predicate already ensures data is within 24 hours, so if we get here
+                // with 0 steps, it's still valid data (just no steps recorded)
                 continuation.resume(returning: steps)
             }
             
@@ -560,6 +643,9 @@ public enum SynheartWearError: LocalizedError {
     case apiError(String)
     case rateLimitExceeded
     case serverError(Int, String?)
+    
+    // Data availability errors
+    case noWearableData
 
     public var errorDescription: String? {
         switch self {
@@ -595,6 +681,8 @@ public enum SynheartWearError: LocalizedError {
             return "Rate limit exceeded. Please try again later."
         case .serverError(let code, let message):
             return message ?? "Server error: \(code). Please try again later."
+        case .noWearableData:
+            return "No wearable data available. Please check if your wearable device is connected and syncing data. (NO_WEARABLE_DATA)"
         }
     }
 }

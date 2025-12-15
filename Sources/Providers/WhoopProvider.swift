@@ -36,6 +36,9 @@ public class WhoopProvider: WearableProvider {
     /// State parameter for OAuth flow (CSRF protection)
     private var oauthState: String?
     
+    /// Maximum age for data to be considered fresh (24 hours)
+    private static let maxStaleAge: TimeInterval = 24 * 60 * 60
+    
     // MARK: - Initialization
     
     /// Initialize WHOOP provider
@@ -253,13 +256,16 @@ public class WhoopProvider: WearableProvider {
             
             let metrics = convertDataResponseToMetrics(response, dataType: "recovery")
             
-            // Validate converted metrics
-            let validMetrics = metrics.filter { metric in
-                // Basic validation - ensure we have at least a timestamp
-                metric.timestamp.timeIntervalSince1970 > 0
+            // Filter for fresh, valid metrics (24-hour freshness check)
+            let freshValidMetrics = filterFreshValidMetrics(metrics)
+            
+            // Only throw error if ALL records have ALL metrics as null/empty, or all records are stale
+            if allMetricsStaleOrEmpty(metrics) {
+                throw SynheartWearError.noWearableData
             }
             
-            return validMetrics
+            // Return fresh valid metrics (partial data is OK)
+            return freshValidMetrics
         } catch let error as NetworkError {
             throw convertNetworkError(error)
         } catch let error as SynheartWearError {
@@ -305,12 +311,16 @@ public class WhoopProvider: WearableProvider {
             
             let metrics = convertDataResponseToMetrics(response, dataType: "sleep")
             
-            // Validate converted metrics
-            let validMetrics = metrics.filter { metric in
-                metric.timestamp.timeIntervalSince1970 > 0
+            // Filter for fresh, valid metrics (24-hour freshness check)
+            let freshValidMetrics = filterFreshValidMetrics(metrics)
+            
+            // Only throw error if ALL records have ALL metrics as null/empty, or all records are stale
+            if allMetricsStaleOrEmpty(metrics) {
+                throw SynheartWearError.noWearableData
             }
             
-            return validMetrics
+            // Return fresh valid metrics (partial data is OK)
+            return freshValidMetrics
         } catch let error as NetworkError {
             throw convertNetworkError(error)
         } catch let error as SynheartWearError {
@@ -356,12 +366,16 @@ public class WhoopProvider: WearableProvider {
             
             let metrics = convertDataResponseToMetrics(response, dataType: "workout")
             
-            // Validate converted metrics
-            let validMetrics = metrics.filter { metric in
-                metric.timestamp.timeIntervalSince1970 > 0
+            // Filter for fresh, valid metrics (24-hour freshness check)
+            let freshValidMetrics = filterFreshValidMetrics(metrics)
+            
+            // Only throw error if ALL records have ALL metrics as null/empty, or all records are stale
+            if allMetricsStaleOrEmpty(metrics) {
+                throw SynheartWearError.noWearableData
             }
             
-            return validMetrics
+            // Return fresh valid metrics (partial data is OK)
+            return freshValidMetrics
         } catch let error as NetworkError {
             throw convertNetworkError(error)
         } catch let error as SynheartWearError {
@@ -407,17 +421,21 @@ public class WhoopProvider: WearableProvider {
             
             let metrics = convertDataResponseToMetrics(response, dataType: "cycle")
             
-            // Validate converted metrics - filter out any invalid ones
-            let validMetrics = metrics.filter { metric in
-                metric.timestamp.timeIntervalSince1970 > 0
+            // Filter for fresh, valid metrics (24-hour freshness check)
+            let freshValidMetrics = filterFreshValidMetrics(metrics)
+            
+            // Only throw error if ALL records have ALL metrics as null/empty, or all records are stale
+            if allMetricsStaleOrEmpty(metrics) {
+                throw SynheartWearError.noWearableData
             }
             
-            // If we had records but no valid metrics, log a warning
-            if !response.records.isEmpty && validMetrics.isEmpty {
-                print("[WhoopProvider] Warning: Received \(response.records.count) cycle record(s) but none could be converted to valid metrics. This may indicate a data format issue.")
+            // If we had records but no fresh valid metrics, log a warning
+            if !response.records.isEmpty && freshValidMetrics.isEmpty {
+                print("[WhoopProvider] Warning: Received \(response.records.count) cycle record(s) but none were fresh or had valid metrics. This may indicate stale data.")
             }
             
-            return validMetrics
+            // Return fresh valid metrics (partial data is OK)
+            return freshValidMetrics
         } catch let error as NetworkError {
             // Convert network errors with better context
             let convertedError = convertNetworkError(error)
@@ -434,6 +452,37 @@ public class WhoopProvider: WearableProvider {
     }
     
     // MARK: - Private Methods
+    
+    /// Check if a timestamp is fresh (within maxStaleAge)
+    private func isFresh(_ timestamp: Date) -> Bool {
+        let age = Date().timeIntervalSince(timestamp)
+        return age <= Self.maxStaleAge
+    }
+    
+    /// Check if metrics dictionary has any valid (non-zero, non-null) values
+    private func hasValidMetrics(_ metrics: [String: Double]) -> Bool {
+        return !metrics.isEmpty && metrics.values.contains { $0 > 0 }
+    }
+    
+    /// Check if WearMetrics has any valid data
+    private func hasValidData(_ metrics: WearMetrics) -> Bool {
+        return hasValidMetrics(metrics.metrics) && isFresh(metrics.timestamp)
+    }
+    
+    /// Filter and validate WearMetrics array, returning only fresh records with valid data
+    private func filterFreshValidMetrics(_ metrics: [WearMetrics]) -> [WearMetrics] {
+        return metrics.filter { hasValidData($0) }
+    }
+    
+    /// Check if all metrics in an array are stale or empty
+    private func allMetricsStaleOrEmpty(_ metrics: [WearMetrics]) -> Bool {
+        if metrics.isEmpty {
+            return true
+        }
+        return metrics.allSatisfy { metric in
+            !isFresh(metric.timestamp) || !hasValidMetrics(metric.metrics)
+        }
+    }
     
     /// Convert DataResponse from API to array of WearMetrics
     ///
