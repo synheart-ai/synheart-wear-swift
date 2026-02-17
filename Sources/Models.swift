@@ -7,6 +7,7 @@ public enum DeviceAdapter {
     case fitbit
     case garmin
     case whoop
+    case bleHrm
 }
 
 /// Permission types for biometric data access

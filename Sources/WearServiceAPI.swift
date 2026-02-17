@@ -246,27 +246,202 @@ internal struct WearServiceAPI {
         var queryParams: [String: String] = [
             "app_id": appId
         ]
-        
+
         if let start = start {
             let formatter = ISO8601DateFormatter()
             queryParams["start"] = formatter.string(from: start)
         }
-        
+
         if let end = end {
             let formatter = ISO8601DateFormatter()
             queryParams["end"] = formatter.string(from: end)
         }
-        
+
         if let limit = limit {
             queryParams["limit"] = String(limit)
         }
-        
+
         if let cursor = cursor {
             queryParams["cursor"] = cursor
         }
-        
+
         return try await networkClient.get(
             path: "/v1/whoop/data/\(userId)/cycles",
+            queryParameters: queryParams
+        )
+    }
+
+    // MARK: - Garmin OAuth Endpoints
+
+    /// Get Garmin OAuth authorization URL
+    ///
+    /// The service handles PKCE code_verifier/challenge generation.
+    /// After user authorizes, Garmin redirects to service HTTPS URL,
+    /// then service redirects to app's deep link with success/error.
+    ///
+    /// - Parameters:
+    ///   - redirectUri: Deep link URI for OAuth callback
+    ///   - state: State parameter for CSRF protection
+    ///   - appId: Application ID
+    ///   - userId: Optional user ID (for re-authorization)
+    /// - Returns: Authorization URL response
+    func getGarminAuthorizationURL(
+        redirectUri: String,
+        state: String,
+        appId: String,
+        userId: String? = nil
+    ) async throws -> AuthorizationURLResponse {
+        var queryParams: [String: String] = [
+            "redirect_uri": redirectUri,
+            "state": state,
+            "app_id": appId
+        ]
+
+        if let userId = userId {
+            queryParams["user_id"] = userId
+        }
+
+        return try await networkClient.get(
+            path: "/v1/garmin/oauth/authorize",
+            queryParameters: queryParams
+        )
+    }
+
+    /// Exchange Garmin authorization code for access token
+    ///
+    /// Note: For Garmin, the service handles the intermediate redirect
+    /// and token exchange. This is called by the service internally,
+    /// but exposed for completeness.
+    ///
+    /// - Parameters:
+    ///   - code: Authorization code from Garmin callback
+    ///   - state: State parameter from callback
+    ///   - redirectUri: Redirect URI used in authorization
+    /// - Returns: OAuth callback response with user_id
+    func exchangeGarminCode(
+        code: String,
+        state: String,
+        redirectUri: String
+    ) async throws -> OAuthCallbackResponse {
+        let body = OAuthCallbackRequest(
+            code: code,
+            state: state,
+            redirectUri: redirectUri
+        )
+
+        return try await networkClient.post(
+            path: "/v1/garmin/oauth/callback",
+            body: body
+        )
+    }
+
+    /// Disconnect Garmin user account
+    ///
+    /// This also calls Garmin's DELETE /user/registration API
+    /// to deregister the user from receiving webhook data.
+    ///
+    /// - Parameters:
+    ///   - userId: User ID to disconnect
+    ///   - appId: Application ID
+    func disconnectGarmin(userId: String, appId: String) async throws -> DisconnectResponse {
+        let queryParams: [String: String] = [
+            "user_id": userId,
+            "app_id": appId
+        ]
+
+        return try await networkClient.delete(
+            path: "/v1/garmin/oauth/disconnect",
+            queryParameters: queryParams
+        )
+    }
+
+    // MARK: - Garmin Data Endpoints
+
+    /// Fetch Garmin data by summary type
+    ///
+    /// - Parameters:
+    ///   - userId: User ID
+    ///   - summaryType: Garmin summary type (e.g., "dailies", "sleeps", "hrv")
+    ///   - appId: Application ID
+    ///   - start: Start date (optional)
+    ///   - end: End date (optional)
+    /// - Returns: Data response with Garmin records
+    func fetchGarminData(
+        userId: String,
+        summaryType: String,
+        appId: String,
+        start: Date? = nil,
+        end: Date? = nil
+    ) async throws -> DataResponse {
+        var queryParams: [String: String] = [
+            "app_id": appId
+        ]
+
+        if let start = start {
+            let formatter = ISO8601DateFormatter()
+            queryParams["start"] = formatter.string(from: start)
+        }
+
+        if let end = end {
+            let formatter = ISO8601DateFormatter()
+            queryParams["end"] = formatter.string(from: end)
+        }
+
+        return try await networkClient.get(
+            path: "/v1/garmin/data/\(userId)/\(summaryType)",
+            queryParameters: queryParams
+        )
+    }
+
+    /// Request Garmin historical data backfill
+    ///
+    /// Garmin uses webhook-based data delivery, so historical data
+    /// must be requested via the backfill API. Data is delivered
+    /// asynchronously via webhooks.
+    ///
+    /// - Parameters:
+    ///   - userId: User ID
+    ///   - summaryType: Garmin summary type to backfill
+    ///   - appId: Application ID
+    ///   - start: Start of date range (max 90 days from end)
+    ///   - end: End of date range
+    /// - Returns: Backfill response
+    func requestGarminBackfill(
+        userId: String,
+        summaryType: String,
+        appId: String,
+        start: Date,
+        end: Date
+    ) async throws -> GarminBackfillResponse {
+        let formatter = ISO8601DateFormatter()
+        let body = GarminBackfillRequest(
+            appId: appId,
+            start: formatter.string(from: start),
+            end: formatter.string(from: end)
+        )
+
+        return try await networkClient.post(
+            path: "/v1/garmin/data/\(userId)/backfill/\(summaryType)",
+            body: body
+        )
+    }
+
+    /// Get Garmin webhook URLs
+    ///
+    /// Returns webhook endpoint URLs that should be configured
+    /// in the Garmin Developer Portal.
+    ///
+    /// - Parameter appId: Application ID
+    /// - Returns: Webhook URLs response
+    func getGarminWebhookUrls(
+        appId: String
+    ) async throws -> GarminWebhookUrlsResponse {
+        let queryParams: [String: String] = [
+            "app_id": appId
+        ]
+
+        return try await networkClient.get(
+            path: "/v1/garmin/webhooks",
             queryParameters: queryParams
         )
     }
@@ -389,6 +564,31 @@ internal struct DataRecord: Codable {
         var container = encoder.singleValueContainer()
         try container.encode(fields)
     }
+}
+
+// MARK: - Garmin Request/Response Models
+
+/// Garmin backfill request
+internal struct GarminBackfillRequest: Codable {
+    let appId: String
+    let start: String
+    let end: String
+
+    enum CodingKeys: String, CodingKey {
+        case appId = "app_id"
+        case start
+        case end
+    }
+}
+
+/// Garmin backfill response
+internal struct GarminBackfillResponse: Codable {
+    let status: String
+}
+
+/// Garmin webhook URLs response
+internal struct GarminWebhookUrlsResponse: Codable {
+    let endpoints: [String: String]
 }
 
 // MARK: - Supporting Types

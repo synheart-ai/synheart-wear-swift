@@ -1,6 +1,6 @@
 # Synheart Wear - iOS SDK
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![iOS 13.0+](https://img.shields.io/badge/iOS-13.0%2B-blue.svg)](https://developer.apple.com/ios/)
 [![Swift 5.9+](https://img.shields.io/badge/Swift-5.9%2B-orange.svg)](https://swift.org)
 [![watchOS 6.0+](https://img.shields.io/badge/watchOS-6.0%2B-blue.svg)](https://developer.apple.com/watchos/)
@@ -803,7 +803,7 @@ We welcome contributions! See the main repository's [Contributing Guidelines](ht
 
 ## 📄 License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the Apache 2.0 License - see the [LICENSE](LICENSE) file for details.
 
 ## 🔗 Links
 
