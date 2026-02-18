@@ -15,7 +15,7 @@ public class SynheartWear {
     private let healthStore = HKHealthStore()
 
     private var streamCancellables = Set<AnyCancellable>()
-    
+
     // Wear Service providers
     private var whoopProvider: WhoopProvider?
     private var garminProvider: GarminProvider?
@@ -41,6 +41,9 @@ public class SynheartWear {
     /// to Garmin and is not distributed as open source.
     public var garminHealth: GarminHealth? { return _garminHealth }
 
+    // Flux processor (optional)
+    private var fluxProcessor: FluxProcessor?
+
     /// Initialize SynheartWear with configuration
     ///
     /// - Parameters:
@@ -61,7 +64,7 @@ public class SynheartWear {
 
         // Initialize providers if configuration is provided
         if let appId = config.appId {
-            let baseUrl = config.baseUrl ?? URL(string: "https://synheart-wear-service-leatest.onrender.com")!
+            let baseUrl = config.baseUrl ?? URL(string: "https://api.synheart.ai/wear")!
             let redirectUri = config.redirectUri ?? "synheart://oauth/callback"
             
             if config.enabledAdapters.contains(.whoop) {
@@ -118,6 +121,14 @@ public class SynheartWear {
         }
 
         try await consentManager.initialize()
+
+        // Initialize Flux processor if enabled
+        if config.enableFlux {
+            fluxProcessor = FluxProcessor(baselineWindowDays: config.fluxBaselineWindowDays)
+            if !fluxProcessor!.isAvailable {
+                print("[SynheartWear] Flux enabled but native library not available - running in degraded mode")
+            }
+        }
 
         initialized = true
     }
@@ -449,6 +460,155 @@ public class SynheartWear {
         try ensureInitialized()
         try await localCache.purgeAll()
         try await consentManager.revokeAllConsents()
+    }
+
+    // MARK: - Flux Integration (HSI Output)
+
+    /// Check if Flux is enabled and available
+    ///
+    /// - Returns: true if Flux is enabled in config AND native library is loaded
+    public func isFluxEnabled() -> Bool {
+        return config.enableFlux && (fluxProcessor?.isAvailable ?? false)
+    }
+
+    /// Check if Flux native library is available (static check)
+    ///
+    /// - Returns: true if native library is loaded, regardless of config
+    public var isFluxNativeAvailable: Bool {
+        isFluxAvailable
+    }
+
+    /// Read wearable data and process through Flux to get HSI output
+    ///
+    /// - Parameters:
+    ///   - vendor: Wearable vendor (WHOOP, GARMIN)
+    ///   - deviceId: Unique device identifier
+    ///   - timezone: User's timezone (e.g., "America/New_York")
+    ///   - rawVendorJson: Raw vendor API response JSON
+    /// - Returns: HsiPayload containing HSI 1.0 compliant output
+    /// - Throws: FluxError if Flux is not enabled or processing fails
+    public func readFluxSnapshot(
+        vendor: Vendor,
+        deviceId: String,
+        timezone: String,
+        rawVendorJson: String
+    ) throws -> HsiPayload {
+        try ensureInitialized()
+
+        guard config.enableFlux else {
+            throw FluxError.disabled
+        }
+
+        guard let processor = fluxProcessor else {
+            throw FluxError.notAvailable("Flux processor not initialized")
+        }
+
+        guard processor.isAvailable else {
+            throw FluxError.notAvailable(fluxLoadError)
+        }
+
+        let jsonStrings: [String]?
+        switch vendor {
+        case .whoop:
+            jsonStrings = processor.processWhoop(rawVendorJson, timezone: timezone, deviceId: deviceId)
+        case .garmin:
+            jsonStrings = processor.processGarmin(rawVendorJson, timezone: timezone, deviceId: deviceId)
+        }
+
+        guard let results = jsonStrings, !results.isEmpty else {
+            throw FluxError.processingFailed(FluxFfi.shared.getLastError())
+        }
+
+        // Return the first (most recent) payload
+        return try HsiPayload.fromJson(results[0])
+    }
+
+    /// Read wearable data and process through Flux to get all HSI daily payloads
+    ///
+    /// - Parameters:
+    ///   - vendor: Wearable vendor (WHOOP, GARMIN)
+    ///   - deviceId: Unique device identifier
+    ///   - timezone: User's timezone (e.g., "America/New_York")
+    ///   - rawVendorJson: Raw vendor API response JSON
+    /// - Returns: Array of HsiPayload (one per day in the input)
+    /// - Throws: FluxError if Flux is not enabled or processing fails
+    public func readFluxSnapshots(
+        vendor: Vendor,
+        deviceId: String,
+        timezone: String,
+        rawVendorJson: String
+    ) throws -> [HsiPayload] {
+        try ensureInitialized()
+
+        guard config.enableFlux else {
+            throw FluxError.disabled
+        }
+
+        guard let processor = fluxProcessor else {
+            throw FluxError.notAvailable("Flux processor not initialized")
+        }
+
+        guard processor.isAvailable else {
+            throw FluxError.notAvailable(fluxLoadError)
+        }
+
+        let jsonStrings: [String]?
+        switch vendor {
+        case .whoop:
+            jsonStrings = processor.processWhoop(rawVendorJson, timezone: timezone, deviceId: deviceId)
+        case .garmin:
+            jsonStrings = processor.processGarmin(rawVendorJson, timezone: timezone, deviceId: deviceId)
+        }
+
+        guard let results = jsonStrings else {
+            throw FluxError.processingFailed(FluxFfi.shared.getLastError())
+        }
+
+        return try results.map { try HsiPayload.fromJson($0) }
+    }
+
+    /// Save Flux baselines to JSON for persistence
+    ///
+    /// - Returns: Baselines JSON string or nil if Flux is not available
+    /// - Throws: FluxError if Flux is not enabled
+    public func saveFluxBaselines() throws -> String? {
+        try ensureInitialized()
+
+        guard config.enableFlux else {
+            throw FluxError.disabled
+        }
+
+        return fluxProcessor?.saveBaselines()
+    }
+
+    /// Load Flux baselines from previously saved JSON
+    ///
+    /// - Parameter json: Baselines JSON string (from saveFluxBaselines)
+    /// - Returns: true if baselines were loaded successfully
+    /// - Throws: FluxError if Flux is not enabled
+    @discardableResult
+    public func loadFluxBaselines(_ json: String) throws -> Bool {
+        try ensureInitialized()
+
+        guard config.enableFlux else {
+            throw FluxError.disabled
+        }
+
+        return fluxProcessor?.loadBaselines(json) ?? false
+    }
+
+    /// Get current Flux baselines as typed object
+    ///
+    /// - Returns: Baselines object or nil if not available
+    /// - Throws: FluxError if Flux is not enabled
+    public func getFluxBaselines() throws -> Baselines? {
+        try ensureInitialized()
+
+        guard config.enableFlux else {
+            throw FluxError.disabled
+        }
+
+        return fluxProcessor?.currentBaselines
     }
 
     // MARK: - Private Methods

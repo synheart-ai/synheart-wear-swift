@@ -191,11 +191,17 @@ public struct SynheartWearConfig {
     public let streamInterval: TimeInterval
     public let maxCacheSize: Int64
     public let maxCacheAge: TimeInterval
-    
+
     // Wear Service configuration
     public let baseUrl: URL?
     public let appId: String?
     public let redirectUri: String?
+
+    // Flux configuration
+    /// Whether to enable Flux (HSI processing) - requires native library
+    public let enableFlux: Bool
+    /// Number of days for Flux baseline calculations (default: 14)
+    public let fluxBaselineWindowDays: Int
 
     public init(
         enabledAdapters: Set<DeviceAdapter> = [.appleHealthKit],
@@ -206,7 +212,9 @@ public struct SynheartWearConfig {
         maxCacheAge: TimeInterval = 30 * 24 * 60 * 60, // 30 days
         baseUrl: URL? = nil,
         appId: String? = nil,
-        redirectUri: String? = nil
+        redirectUri: String? = nil,
+        enableFlux: Bool = false,
+        fluxBaselineWindowDays: Int = 14
     ) {
         self.enabledAdapters = enabledAdapters
         self.enableLocalCaching = enableLocalCaching
@@ -217,5 +225,7 @@ public struct SynheartWearConfig {
         self.baseUrl = baseUrl
         self.appId = appId
         self.redirectUri = redirectUri
+        self.enableFlux = enableFlux
+        self.fluxBaselineWindowDays = fluxBaselineWindowDays
     }
 }
