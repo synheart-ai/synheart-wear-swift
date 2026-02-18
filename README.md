@@ -44,48 +44,6 @@ Add to your `Podfile`:
 pod 'SynheartWear', '~> 0.2.0'
 ```
 
-### Flux Installation (Optional)
-
-Flux is Synheart’s native **HSI (Human State Interface)** processor (Rust via C FFI). It is **optional**: if the native library is not bundled, the SDK continues to work normally, but Flux APIs run in “degraded mode” (`isFluxAvailable == false`).
-
-#### 1) Download the Flux XCFramework (pinned version)
-
-This repo pins the Flux version in `vendor/flux/VERSION` (e.g. `v0.1.0`). Download the matching artifact from Flux releases (`synheart-flux-ios-xcframework.zip`) and extract it into:
-
-```bash
-unzip synheart-flux-ios-xcframework.zip -d vendor/flux/ios/
-```
-
-Expected path after extraction:
-- `vendor/flux/ios/SynheartFlux.xcframework`
-
-For more details (including CI automation), see `vendor/flux/README.md`.
-
-#### 2) Embed the framework in your app (Xcode)
-
-- Drag `SynheartFlux.xcframework` into your Xcode project
-- In **General → Frameworks, Libraries, and Embedded Content**, set it to **Embed & Sign**
-
-#### 2b) Swift Package Manager apps (optional)
-
-If your app is managed by SwiftPM (and you keep the XCFramework in-repo), you can add it as a binary target:
-
-```swift
-.binaryTarget(
-    name: "SynheartFlux",
-    path: "vendor/flux/ios/SynheartFlux.xcframework"
-)
-```
-
-#### 3) Verify Flux is available at runtime
-
-```swift
-import SynheartWear
-
-print("Flux available: \(isFluxAvailable)")
-print("Flux load error: \(fluxLoadError ?? "none")")
-```
-
 ### Requirements
 
 - **iOS**: 13.0+
