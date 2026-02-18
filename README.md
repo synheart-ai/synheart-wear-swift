@@ -27,21 +27,21 @@ Add to your `Package.swift`:
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/synheart-ai/synheart-wear-ios.git", from: "0.1.0")
+    .package(url: "https://github.com/synheart-ai/synheart-wear-ios.git", from: "0.2.0")
 ]
 ```
 
 Or in Xcode:
 1. File → Add Packages...
 2. Enter: `https://github.com/synheart-ai/synheart-wear-ios.git`
-3. Select version: `0.1.0` or later
+3. Select version: `0.2.0` or later
 
 ### CocoaPods
 
 Add to your `Podfile`:
 
 ```ruby
-pod 'SynheartWear', '~> 0.1.0'
+pod 'SynheartWear', '~> 0.2.0'
 ```
 
 ### Requirements
