@@ -139,3 +139,6 @@ TESTING_APPROACH.md
 
 # Internal workflow docs (ignore entire directory)
 workflow_docs/
+
+# Garmin RTS companion (cloned at build time)
+.garmin/

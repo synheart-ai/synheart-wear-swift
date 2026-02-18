@@ -1,6 +1,6 @@
 # Synheart Wear - iOS SDK
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![iOS 13.0+](https://img.shields.io/badge/iOS-13.0%2B-blue.svg)](https://developer.apple.com/ios/)
 [![Swift 5.9+](https://img.shields.io/badge/Swift-5.9%2B-orange.svg)](https://swift.org)
 [![watchOS 6.0+](https://img.shields.io/badge/watchOS-6.0%2B-blue.svg)](https://developer.apple.com/watchos/)
@@ -27,21 +27,21 @@ Add to your `Package.swift`:
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/synheart-ai/synheart-wear-ios.git", from: "0.1.0")
+    .package(url: "https://github.com/synheart-ai/synheart-wear-ios.git", from: "0.2.0")
 ]
 ```
 
 Or in Xcode:
 1. File → Add Packages...
 2. Enter: `https://github.com/synheart-ai/synheart-wear-ios.git`
-3. Select version: `0.1.0` or later
+3. Select version: `0.2.0` or later
 
 ### CocoaPods
 
 Add to your `Podfile`:
 
 ```ruby
-pod 'SynheartWear', '~> 0.1.0'
+pod 'SynheartWear', '~> 0.2.0'
 ```
 
 ### Flux Installation (Optional)
@@ -845,7 +845,7 @@ We welcome contributions! See the main repository's [Contributing Guidelines](ht
 
 ## 📄 License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the Apache 2.0 License - see the [LICENSE](LICENSE) file for details.
 
 ## 🔗 Links
 

@@ -18,18 +18,50 @@ public class SynheartWear {
 
     // Wear Service providers
     private var whoopProvider: WhoopProvider?
+    private var garminProvider: GarminProvider?
+
+    // BLE HRM provider
+    private var _bleHrmProvider: BleHrmProvider?
+
+    // Garmin Health SDK provider (native device integration)
+    private var _garminHealth: GarminHealth?
+
+    /// BLE Heart Rate Monitor provider for direct BLE sensor access
+    public var bleHrm: BleHrmProvider? { return _bleHrmProvider }
+
+    /// Garmin wearable provider for OAuth connection and data fetching
+    public var garmin: GarminProvider? { return garminProvider }
+
+    /// Garmin Health SDK provider for native device integration (scan, pair, stream)
+    ///
+    /// Available when a `GarminHealth` instance is provided at initialization.
+    /// The Garmin Health SDK real-time streaming (RTS) capability requires a
+    /// separate license from Garmin. This facade is available on demand for
+    /// licensed integrations. The underlying native SDK code is proprietary
+    /// to Garmin and is not distributed as open source.
+    public var garminHealth: GarminHealth? { return _garminHealth }
 
     // Flux processor (optional)
     private var fluxProcessor: FluxProcessor?
 
     /// Initialize SynheartWear with configuration
     ///
-    /// - Parameter config: SDK configuration
-    public init(config: SynheartWearConfig = SynheartWearConfig()) {
+    /// - Parameters:
+    ///   - config: SDK configuration
+    ///   - garminHealth: Optional GarminHealth instance for native Garmin device integration.
+    ///     Requires a Garmin Health SDK license. The RTS capability is proprietary to Garmin
+    ///     and available on demand for licensed integrations.
+    public init(config: SynheartWearConfig = SynheartWearConfig(), garminHealth: GarminHealth? = nil) {
         self.config = config
         self.consentManager = ConsentManager()
         self.localCache = LocalCache(enableEncryption: config.enableEncryption)
-        
+        self._garminHealth = garminHealth
+
+        // Initialize BLE HRM provider if enabled
+        if config.enabledAdapters.contains(.bleHrm) {
+            self._bleHrmProvider = BleHrmProvider()
+        }
+
         // Initialize providers if configuration is provided
         if let appId = config.appId {
             let baseUrl = config.baseUrl ?? URL(string: "https://api.synheart.ai/wear")!
@@ -37,6 +69,14 @@ public class SynheartWear {
             
             if config.enabledAdapters.contains(.whoop) {
                 self.whoopProvider = WhoopProvider(
+                    appId: appId,
+                    baseUrl: baseUrl,
+                    redirectUri: redirectUri
+                )
+            }
+
+            if config.enabledAdapters.contains(.garmin) {
+                self.garminProvider = GarminProvider(
                     appId: appId,
                     baseUrl: baseUrl,
                     redirectUri: redirectUri
@@ -57,7 +97,12 @@ public class SynheartWear {
                 throw SynheartWearError.apiError("WHOOP provider not configured. Please provide appId in SynheartWearConfig.")
             }
             return provider
-        case .appleHealthKit, .fitbit, .garmin:
+        case .garmin:
+            guard let provider = garminProvider else {
+                throw SynheartWearError.apiError("Garmin provider not configured. Please provide appId in SynheartWearConfig.")
+            }
+            return provider
+        case .appleHealthKit, .fitbit, .bleHrm:
             throw SynheartWearError.apiError("Provider for \(adapter) not yet implemented.")
         }
     }
@@ -218,6 +263,39 @@ public class SynheartWear {
             }
         }
 
+        // Read from Garmin if connected
+        if config.enabledAdapters.contains(.garmin),
+           let garminProvider = garminProvider,
+           garminProvider.isConnected() {
+            do {
+                // Fetch latest dailies data (most recent record)
+                let dailiesData = try await garminProvider.fetchDailies(
+                    start: Date().addingTimeInterval(-24 * 60 * 60), // Last 24 hours
+                    end: Date()
+                )
+
+                if let latestDailies = dailiesData.first {
+                    allMetrics.append(latestDailies)
+                }
+            } catch SynheartWearError.tokenExpired {
+                // Token expired - mark provider as disconnected but continue
+                print("Warning: Garmin token expired. User needs to reconnect.")
+                try? await garminProvider.disconnect()
+            } catch SynheartWearError.notConnected {
+                // Already disconnected - just continue
+            } catch {
+                // Other errors (network, etc.) - log but don't fail
+                print("Warning: Failed to read Garmin metrics: \(error)")
+            }
+        }
+
+        // Include BLE HRM last sample if connected
+        if let bleProvider = _bleHrmProvider,
+           bleProvider.isConnected(),
+           let sample = bleProvider.lastSample {
+            allMetrics.append(sample.toWearMetrics())
+        }
+
         // Merge all metrics from different sources
         let mergedMetrics: WearMetrics
         if allMetrics.isEmpty {
@@ -279,7 +357,20 @@ public class SynheartWear {
             // For HealthKit, return current metrics
             let metrics = try await readMetrics()
             return [metrics]
-        case .fitbit, .garmin:
+        case .bleHrm:
+            if let bleProvider = _bleHrmProvider, let sample = bleProvider.lastSample {
+                return [sample.toWearMetrics()]
+            }
+            return []
+        case .garmin:
+            guard let garminProvider = garminProvider else {
+                throw SynheartWearError.apiError("Garmin provider not configured. Please provide appId in SynheartWearConfig.")
+            }
+            guard garminProvider.isConnected() else {
+                throw SynheartWearError.notConnected
+            }
+            return try await garminProvider.fetchDailies(start: start, end: end)
+        case .fitbit:
             throw SynheartWearError.apiError("Provider for \(adapter) not yet implemented.")
         }
     }
@@ -671,6 +762,9 @@ public enum SynheartWearError: LocalizedError {
     case rateLimitExceeded
     case serverError(Int, String?)
 
+    // BLE HRM errors
+    case bleHrm(BleHrmErrorCode, String)
+
     public var errorDescription: String? {
         switch self {
         case .notInitialized:
@@ -705,6 +799,8 @@ public enum SynheartWearError: LocalizedError {
             return "Rate limit exceeded. Please try again later."
         case .serverError(let code, let message):
             return message ?? "Server error: \(code). Please try again later."
+        case .bleHrm(let code, let message):
+            return "BLE HRM error (\(code.rawValue)): \(message)"
         }
     }
 }
