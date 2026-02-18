@@ -109,7 +109,7 @@ public struct WearMetrics: Codable {
         ]
 
         if let intervals = rrIntervals {
-            dict["rr_intervals"] = intervals
+            dict["rr_ms"] = intervals
         }
 
         return dict

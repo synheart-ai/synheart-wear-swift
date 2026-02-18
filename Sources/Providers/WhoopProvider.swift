@@ -915,7 +915,7 @@ public class WhoopProvider: WearableProvider {
     /// Extract RR intervals from data
     private func extractRRIntervals(from data: [String: AnyCodable]) -> [Double]? {
         // Try common field names for RR intervals
-        let rrKeys = ["rr_intervals", "rrIntervals", "rri", "intervals"]
+        let rrKeys = ["rr_ms", "rr_intervals", "rrIntervals", "rri", "intervals"]
         
         for key in rrKeys {
             if let value = data[key]?.value {
