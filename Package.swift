@@ -5,7 +5,7 @@ let package = Package(
     name: "SynheartWear",
     platforms: [
         .iOS(.v13),
-        .watchOS(.v6),
+        .watchOS(.v8),
         .macOS(.v13)
     ],
     products: [
