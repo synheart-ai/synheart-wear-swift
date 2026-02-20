@@ -103,7 +103,7 @@ public class WhoopProvider: WearableProvider {
                 throw SynheartWearError.invalidResponse
             }
             
-            #if canImport(UIKit)
+            #if os(iOS)
             await MainActor.run {
                 if UIApplication.shared.canOpenURL(url) {
                     UIApplication.shared.open(url)
@@ -113,7 +113,7 @@ public class WhoopProvider: WearableProvider {
             // macOS: Use NSWorkspace
             NSWorkspace.shared.open(url)
             #else
-            // Fallback for other platforms
+            // Fallback for other platforms (watchOS, etc.)
             throw SynheartWearError.apiError("Cannot open URL on this platform")
             #endif
             
