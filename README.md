@@ -797,6 +797,14 @@ class HealthViewModel: ObservableObject {
 }
 ```
 
+## ⌚ Real-Time Watch Data
+
+Due to HealthKit API limitations, real-time biometric streaming (HR, HRV, accelerometer) on Apple Watch requires an active `HKWorkoutSession`. For real-time session-based data, use the Synheart watchOS companion app alongside the [Synheart Session SDK](https://github.com/synheart-ai/synheart-session):
+
+- [synheart-wear-watch-ios](https://github.com/synheart-ai/synheart-wear-watch-ios) — watchOS companion app (HKWorkoutSession, HKLiveWorkoutBuilder, WCSession relay)
+
+This SDK handles non-realtime and historical data (daily HR, HRV, steps, sleep, etc.) which does not require a workout session.
+
 ## 🤝 Contributing
 
 We welcome contributions! See the main repository's [Contributing Guidelines](https://github.com/synheart-ai/synheart-wear/blob/main/CONTRIBUTING.md) for details.
