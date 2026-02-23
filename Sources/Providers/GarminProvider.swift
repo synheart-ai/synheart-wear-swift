@@ -665,7 +665,8 @@ public class GarminProvider: WearableProvider {
                     return Date(timeIntervalSince1970: timestamp)
                 } else if let intValue = value as? Int {
                     // Garmin uses seconds
-                    let timestamp = intValue < 10_000_000_000 ? TimeInterval(intValue) : TimeInterval(intValue) / 1000.0
+                    let ts = TimeInterval(intValue)
+                    let timestamp = ts < 10_000_000_000 ? ts : ts / 1000.0
                     return Date(timeIntervalSince1970: timestamp)
                 } else if let stringValue = value as? String {
                     // Try date format (YYYY-MM-DD)
