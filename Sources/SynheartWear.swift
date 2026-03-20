@@ -16,6 +16,11 @@ public class SynheartWear {
 
     private var streamCancellables = Set<AnyCancellable>()
 
+    // Serializes concurrent requestAuthorization calls to prevent duplicate
+    // HealthKit dialogs (iOS crashes when two present simultaneously).
+    private var permissionContinuation: CheckedContinuation<Void, Error>?
+    private var permissionInFlight = false
+
     // Wear Service providers
     private var whoopProvider: WhoopProvider?
     private var garminProvider: GarminProvider?
@@ -124,37 +129,57 @@ public class SynheartWear {
 
     /// Request specific permissions from the user
     ///
+    /// Serializes concurrent calls — if a request is already in flight,
+    /// subsequent callers wait for it instead of triggering a second native
+    /// HealthKit dialog (which crashes with "Attempt to present on...").
+    ///
     /// - Parameter permissions: Set of permission types to request
     /// - Returns: Dictionary mapping permission types to granted status
     /// - Throws: SynheartWearError if permissions cannot be requested
     public func requestPermissions(_ permissions: Set<PermissionType>) async throws -> [PermissionType: Bool] {
         try ensureInitialized()
 
-        let healthKitTypes = permissions.compactMap { $0.toHealthKitType() }
-        let readTypes = Set(healthKitTypes)
-
-        if #available(iOS 15.0, *) {
-            try await healthStore.requestAuthorization(
-                toShare: Set<HKSampleType>(),
-                read: readTypes
-            )
-        } else {
+        // If a permission request is already in flight, wait for it
+        if permissionInFlight {
             try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-                healthStore.requestAuthorization(
+                // Store continuation — will be resumed when the in-flight request finishes
+                self.permissionContinuation = continuation
+            }
+        } else {
+            permissionInFlight = true
+            defer {
+                permissionInFlight = false
+                // Resume any waiting caller
+                permissionContinuation?.resume()
+                permissionContinuation = nil
+            }
+
+            let healthKitTypes = permissions.compactMap { $0.toHealthKitType() }
+            let readTypes = Set(healthKitTypes)
+
+            if #available(iOS 15.0, *) {
+                try await healthStore.requestAuthorization(
                     toShare: Set<HKSampleType>(),
                     read: readTypes
-                ) { success, error in
-                    if let error = error {
-                        continuation.resume(throwing: error)
-                        return
-                    }
+                )
+            } else {
+                try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+                    healthStore.requestAuthorization(
+                        toShare: Set<HKSampleType>(),
+                        read: readTypes
+                    ) { success, error in
+                        if let error = error {
+                            continuation.resume(throwing: error)
+                            return
+                        }
 
-                    guard success else {
-                        continuation.resume(throwing: SynheartWearError.permissionDenied)
-                        return
-                    }
+                        guard success else {
+                            continuation.resume(throwing: SynheartWearError.permissionDenied)
+                            return
+                        }
 
-                    continuation.resume()
+                        continuation.resume()
+                    }
                 }
             }
         }

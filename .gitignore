@@ -142,3 +142,9 @@ workflow_docs/
 
 # Garmin RTS companion (cloned at build time)
 .garmin/
+
+# Secrets & credentials
+*.asc
+*.key
+*private*
+.env
