@@ -79,7 +79,7 @@ public class GarminProvider: WearableProvider {
         self.baseUrl = baseUrl ?? URL(string: "https://synheart-wear-service-leatest.onrender.com")!
         self.redirectUri = redirectUri
         self.api = WearServiceAPI(baseURL: self.baseUrl)
-        self.keychainService = "com.synheart.wear.garmin"
+        self.keychainService = "ai.synheart.wear.garmin"
 
         // Try to load existing user ID from keychain
         self.userId = loadUserId()

@@ -53,7 +53,7 @@ public class WhoopProvider: WearableProvider {
         self.baseUrl = baseUrl ?? URL(string: "https://api.synheart.ai/wear")!
         self.redirectUri = redirectUri
         self.api = WearServiceAPI(baseURL: self.baseUrl)
-        self.keychainService = "com.synheart.wear.whoop"
+        self.keychainService = "ai.synheart.wear.whoop"
         
         // Try to load existing user ID from keychain
         self.userId = loadUserId()
