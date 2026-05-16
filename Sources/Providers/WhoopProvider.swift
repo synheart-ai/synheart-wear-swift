@@ -54,9 +54,37 @@ public class WhoopProvider: WearableProvider {
         self.redirectUri = redirectUri
         self.api = WearServiceAPI(baseURL: self.baseUrl)
         self.keychainService = "ai.synheart.wear.whoop"
-        
+
         // Try to load existing user ID from keychain
         self.userId = loadUserId()
+    }
+
+    /// Test seam: inject a pre-built WearServiceAPI (typically wired
+    /// to a MockURLProtocol-backed URLSession via the NetworkClient
+    /// test seam) so integration tests can exercise the full
+    /// network → JSON-decode → SDK-error-mapping path. Parallels the
+    /// `apiOverride` ctor on the Kotlin sibling.
+    internal init(
+        appId: String,
+        baseUrl: URL? = nil,
+        redirectUri: String = "synheart://oauth/callback",
+        api: WearServiceAPI
+    ) {
+        self.appId = appId
+        self.baseUrl = baseUrl ?? URL(string: "https://api.synheart.ai/wear")!
+        self.redirectUri = redirectUri
+        self.api = api
+        self.keychainService = "ai.synheart.wear.whoop"
+
+        self.userId = loadUserId()
+    }
+
+    /// Test seam: pre-populate the connected userId without going
+    /// through the OAuth handshake. Lets integration tests jump
+    /// straight to data-fetching assertions.
+    internal func simulateConnected(userId: String) {
+        self.userId = userId
+        saveUserId(userId)
     }
     
     // MARK: - WearableProvider Protocol

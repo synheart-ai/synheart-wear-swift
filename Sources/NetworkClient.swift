@@ -17,11 +17,21 @@ internal class NetworkClient {
     init(baseURL: URL, timeout: TimeInterval = 30.0) {
         self.baseURL = baseURL
         self.timeout = timeout
-        
+
         let configuration = URLSessionConfiguration.default
         configuration.timeoutIntervalForRequest = timeout
         configuration.timeoutIntervalForResource = timeout * 2
         self.session = URLSession(configuration: configuration)
+    }
+
+    /// Test seam: inject a custom URLSession (typically built with a
+    /// MockURLProtocol-registered configuration) so tests can exercise
+    /// the full network → JSON-decode → SDK-error-mapping path
+    /// against canned HTTP responses, without hitting the real wire.
+    internal init(baseURL: URL, session: URLSession, timeout: TimeInterval = 30.0) {
+        self.baseURL = baseURL
+        self.timeout = timeout
+        self.session = session
     }
     
     /// Perform a GET request

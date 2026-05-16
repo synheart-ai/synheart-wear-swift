@@ -52,6 +52,19 @@ Even small documentation fixes are best filed as an issue. Quote the section,
 suggest the change, and we will roll it into the next internal sync. This
 keeps a single contribution path and avoids ambiguity about what is in scope.
 
+## Tests
+
+Two patterns coexist; pick the right one. See
+[`Tests/SynheartWearTests/README.md`](Tests/SynheartWearTests/README.md)
+for the full guide and the `WhoopProviderMockServerTests` reference.
+
+- **Direct provider tests** (`WhoopProviderTests` et al.) — fast unit
+  tests for provider state, OAuth flow shape, keychain persistence.
+- **`MockURLProtocol`** (`WhoopProviderMockServerTests`) — full-stack
+  integration tests for HTTP-status mapping, JSON decode, header/auth
+  handling, network failure modes. Depends on internal test-seam
+  initializers on `NetworkClient`, `WearServiceAPI`, and each provider.
+
 ## Code of conduct
 
 Be respectful in issues and discussions. We reserve the right to close issues

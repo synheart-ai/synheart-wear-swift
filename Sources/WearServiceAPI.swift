@@ -11,6 +11,12 @@ internal struct WearServiceAPI {
     init(baseURL: URL) {
         self.networkClient = NetworkClient(baseURL: baseURL)
     }
+
+    /// Test seam: build with a pre-configured NetworkClient. Used by
+    /// integration tests that inject a MockURLProtocol-backed URLSession.
+    internal init(networkClient: NetworkClient) {
+        self.networkClient = networkClient
+    }
     
     // MARK: - OAuth Endpoints
     
