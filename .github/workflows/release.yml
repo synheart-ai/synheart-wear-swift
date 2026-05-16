@@ -1,0 +1,17 @@
+name: Release
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+jobs:
+  validate:
+    name: Validate Release
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: xcodebuild -version
+      - run: swift --version
+      - run: swift build -c release
+      - run: swift test

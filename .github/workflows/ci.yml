@@ -1,0 +1,20 @@
+name: CI
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+    branches: [main, dev]
+
+jobs:
+  test:
+    name: Build & Test
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: xcodebuild -version
+      - run: swift --version
+      - name: Verify no Garmin overlay symlinks committed
+        run: make verify-clean
+      - run: swift build
+      - run: swift test
