@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.2] - 2026-10-07
+
+### Fixed
+- **Real-time reads are rate-limited.** `streamHR` (every 3 s), `streamHRV`
+  (every 5 s) and `streamHRAsync` call `readMetrics(isRealTime: true)` on every
+  tick, and each call also ran a 24-hour HealthKit step-count statistics query
+  and, for a connected WHOOP or Garmin account, a network fetch of the last
+  24 hours. Real-time ticks now re-query steps at most every 60 s (reusing the
+  last day total in between) and fetch cloud records at most every 15 min. The
+  heart-rate read itself (latest sample in the last 60 s) still runs every
+  tick. Non real-time reads are unchanged.
+
 ## [0.4.0] - 2026-05-15
 
 Adds Fitbit + Oura cloud providers to reach parity with the
