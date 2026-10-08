@@ -7,6 +7,17 @@ import Combine
 /// Provides unified access to biometric data from wearable devices
 /// with standardized output format, encryption, and privacy controls.
 public class SynheartWear {
+    /// Real-time reads are the streaming ticks (`streamHR` every 3 s,
+    /// `streamHRV` every 5 s). Steps are a 24-hour cumulative sum, so a tick
+    /// reuses the last total and re-queries it at most this often.
+    private let stepsGate = RealtimeReadGate(minInterval: 60)
+    private var lastSteps: Double = 0
+
+    /// Cloud records (WHOOP recovery, Garmin dailies) change a few times a
+    /// day; fetching them over the network on every streaming tick was pure
+    /// load on the vendor APIs and the device radio.
+    private let cloudGate = RealtimeReadGate(minInterval: 15 * 60)
+
     private var initialized = false
     private let config: SynheartWearConfig
     private let normalizer = Normalizer()
@@ -261,7 +272,13 @@ public class SynheartWear {
         if config.enabledAdapters.contains(.platformHealth) {
             do {
                 let heartRate = try await readHeartRate(isRealTime: isRealTime)
-                let steps = try await readSteps()
+                let steps: Double
+                if !isRealTime || stepsGate.tryAcquire() {
+                    steps = try await readSteps()
+                    lastSteps = steps
+                } else {
+                    steps = lastSteps
+                }
 
                 let healthKitMetrics = WearMetrics(
                     timestamp: Date(),
@@ -283,8 +300,13 @@ public class SynheartWear {
             }
         }
 
+        // Cloud providers: every snapshot read, but real-time ticks at most
+        // every 15 min (see `cloudGate`).
+        let readCloud = !isRealTime || cloudGate.tryAcquire()
+
         // Read from WHOOP if connected
-        if config.enabledAdapters.contains(.whoop),
+        if readCloud,
+           config.enabledAdapters.contains(.whoop),
            let whoopProvider = whoopProvider,
            whoopProvider.isConnected() {
             do {
@@ -312,7 +334,8 @@ public class SynheartWear {
         }
 
         // Read from Garmin if connected
-        if config.enabledAdapters.contains(.garmin),
+        if readCloud,
+           config.enabledAdapters.contains(.garmin),
            let garminProvider = garminProvider,
            garminProvider.isConnected() {
             do {
