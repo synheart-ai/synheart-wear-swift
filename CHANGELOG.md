@@ -7,16 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.2] - 2026-11-02
+
 ### Fixed
 - **Builds for iOS 13–15 and watchOS 8 again.** `HealthKitHistoryReader`
   referenced the iOS 16 / watchOS 9 sleep stages (`asleepDeep`, `asleepREM`)
   without an availability check, so any app targeting below iOS 16 failed to
   compile the package. The stages are now read only where they exist; on older
   systems sleep still totals, with no deep/REM breakdown.
-
-## [0.4.2] - 2026-10-07
-
-### Fixed
 - **Real-time reads are rate-limited.** `streamHR` (every 3 s), `streamHRV`
   (every 5 s) and `streamHRAsync` call `readMetrics(isRealTime: true)` on every
   tick, and each call also ran a 24-hour HealthKit step-count statistics query
@@ -99,5 +97,6 @@ fabricated language from public docs.
   from "Recent Updates".
 - Footer puffery removed.
 
-[Unreleased]: https://github.com/synheart-ai/synheart-wear-swift/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/synheart-ai/synheart-wear-swift/compare/v0.4.2...HEAD
+[0.4.2]: https://github.com/synheart-ai/synheart-wear-swift/compare/v0.4.1...v0.4.2
 [0.3.0]: https://github.com/synheart-ai/synheart-wear-swift/releases/tag/v0.3.0
