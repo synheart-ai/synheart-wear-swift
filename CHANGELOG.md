@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **Builds for iOS 13–15 and watchOS 8 again.** `HealthKitHistoryReader`
+  referenced the iOS 16 / watchOS 9 sleep stages (`asleepDeep`, `asleepREM`)
+  without an availability check, so any app targeting below iOS 16 failed to
+  compile the package. The stages are now read only where they exist; on older
+  systems sleep still totals, with no deep/REM breakdown.
+
 ## [0.4.2] - 2026-10-07
 
 ### Fixed

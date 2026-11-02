@@ -34,6 +34,23 @@ public final class HealthKitHistoryReader: HealthHistoryReader, @unchecked Senda
     // Sleep                                                           //
     // ────────────────────────────────────────────────────────────── //
 
+    // Sleep stages arrived in iOS 16 / watchOS 9 / macOS 13. Below that the
+    // symbols do not exist and HealthKit never writes the values, so the
+    // stage buckets stay nil and every asleep sample counts toward the total.
+    private static let asleepDeepRaw: Int? = {
+        if #available(iOS 16.0, watchOS 9.0, macOS 13.0, *) {
+            return HKCategoryValueSleepAnalysis.asleepDeep.rawValue
+        }
+        return nil
+    }()
+
+    private static let asleepREMRaw: Int? = {
+        if #available(iOS 16.0, watchOS 9.0, macOS 13.0, *) {
+            return HKCategoryValueSleepAnalysis.asleepREM.rawValue
+        }
+        return nil
+    }()
+
     public func fetchSleepNights(
         start: Date,
         end: Date,
@@ -61,10 +78,10 @@ public final class HealthKitHistoryReader: HealthHistoryReader, @unchecked Senda
             case HKCategoryValueSleepAnalysis.awake.rawValue,
                  HKCategoryValueSleepAnalysis.inBed.rawValue:
                 break
-            case HKCategoryValueSleepAnalysis.asleepDeep.rawValue:
+            case let v where v == Self.asleepDeepRaw:
                 bucket.asleep += mins
                 bucket.deep = (bucket.deep ?? 0.0) + mins
-            case HKCategoryValueSleepAnalysis.asleepREM.rawValue:
+            case let v where v == Self.asleepREMRaw:
                 bucket.asleep += mins
                 bucket.rem = (bucket.rem ?? 0.0) + mins
             default:
