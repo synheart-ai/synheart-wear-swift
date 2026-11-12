@@ -10,6 +10,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.4.3] - 2026-11-12
 
 ### Fixed
+- **Overnight HRV from HealthKit is reported as SDNN.** `HealthKitHistoryReader`
+  put HealthKit's SDNN into `OvernightPhysiologySummary.hrvRmssdMs`, so it
+  could be stored as an RMSSD baseline. It now fills the new `hrvSdnnMs` and
+  leaves `hrvRmssdMs` nil. The existing initializer is unchanged; `hrvSdnnMs`
+  defaults to nil.
 - **The local cache is now encrypted.** `enableEncryption` was accepted but
   ignored, and sessions were written as plain JSON. Sessions are now sealed
   with AES-256-GCM (CryptoKit) under a key kept in the Keychain
