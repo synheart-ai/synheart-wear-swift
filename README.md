@@ -347,6 +347,12 @@ print("HR permission: \(status[.heartRate] ?? false)")
 
 ### Local Storage
 
+With `enableEncryption: true`, each cached session is sealed with AES-256-GCM
+under a key kept in the Keychain (after first unlock, this device only) and
+written with file protection on iOS and watchOS. Tampered records are dropped,
+and if the key can't be obtained the session is not cached rather than stored
+unencrypted.
+
 ```swift
 // Get cached sessions (last 7 days)
 let weekAgo = Date().addingTimeInterval(-7 * 24 * 60 * 60)
