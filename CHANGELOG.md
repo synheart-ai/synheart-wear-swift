@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.3] - 2026-11-12
+
 ### Fixed
 - **The local cache is now encrypted.** `enableEncryption` was accepted but
   ignored, and sessions were written as plain JSON. Sessions are now sealed
