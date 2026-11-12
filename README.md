@@ -339,6 +339,12 @@ let status = synheartWear.getPermissionStatus()
 print("HR permission: \(status[.heartRate] ?? false)")
 ```
 
+> **Note**: HealthKit never tells an app whether **read** access was granted.
+> Both maps reflect HealthKit's sharing (write) status, which this SDK never
+> requests, so read-only access reports `false` even when the user allowed
+> reading. Don't gate on them: read, and treat an empty result as "no data or
+> no access".
+
 ### Local Storage
 
 ```swift
