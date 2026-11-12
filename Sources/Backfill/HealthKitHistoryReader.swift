@@ -153,16 +153,18 @@ public final class HealthKitHistoryReader: HealthHistoryReader, @unchecked Senda
             for (t, bpm) in hrPoints where t >= window.startDate && t < window.endDate {
                 acc.hrSum += bpm; acc.hrN += 1
             }
-            for (t, rmssd) in hrvPoints where t >= window.startDate && t < window.endDate {
-                acc.hrvSum += rmssd; acc.hrvN += 1
+            for (t, sdnn) in hrvPoints where t >= window.startDate && t < window.endDate {
+                acc.hrvSum += sdnn; acc.hrvN += 1
             }
             byDay[wakeDay] = acc
         }
 
         return byDay.mapValues { a in
+            // HealthKit's HRV is SDNN; it must not reach an RMSSD baseline.
             OvernightPhysiologySummary(
-                hrvRmssdMs: a.hrvN > 0 ? a.hrvSum / Double(a.hrvN) : nil,
-                restingHrBpm: a.hrN > 0 ? a.hrSum / Double(a.hrN) : nil
+                hrvRmssdMs: nil,
+                restingHrBpm: a.hrN > 0 ? a.hrSum / Double(a.hrN) : nil,
+                hrvSdnnMs: a.hrvN > 0 ? a.hrvSum / Double(a.hrvN) : nil
             )
         }
     }
