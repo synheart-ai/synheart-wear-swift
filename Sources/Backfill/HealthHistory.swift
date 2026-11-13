@@ -35,15 +35,20 @@ public struct SleepNightSummary: Equatable, Sendable {
 
 /// Per-night overnight physiology keyed by local wake-day.
 ///
-/// HR and HRV-RMSSD are averaged over the sleep window(s) for that day.
-/// A field is nil when no in-sleep samples were available — the runtime
-/// treats nils as "missing for this day" rather than zero.
+/// HR and HRV are averaged over the sleep window(s) for that day. RMSSD and
+/// SDNN are different statistics and are never reported as each other:
+/// HealthKit records SDNN only, so `HealthKitHistoryReader` fills
+/// `hrvSdnnMs` and leaves `hrvRmssdMs` nil. A field is nil when no in-sleep
+/// samples were available — the runtime treats nils as "missing for this
+/// day" rather than zero.
 public struct OvernightPhysiologySummary: Equatable, Sendable {
     public let hrvRmssdMs: Double?
+    public let hrvSdnnMs: Double?
     public let restingHrBpm: Double?
 
-    public init(hrvRmssdMs: Double?, restingHrBpm: Double?) {
+    public init(hrvRmssdMs: Double?, restingHrBpm: Double?, hrvSdnnMs: Double? = nil) {
         self.hrvRmssdMs = hrvRmssdMs
+        self.hrvSdnnMs = hrvSdnnMs
         self.restingHrBpm = restingHrBpm
     }
 }

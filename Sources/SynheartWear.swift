@@ -178,8 +178,14 @@ public class SynheartWear {
     /// subsequent callers wait for it instead of triggering a second native
     /// HealthKit dialog (which crashes with "Attempt to present on...").
     ///
+    /// - Important: HealthKit never reveals whether **read** access was
+    ///   granted. The returned map reflects HealthKit's sharing (write)
+    ///   status, which this SDK never requests, so read-only access reports
+    ///   `false` even when the user allowed reading. Don't gate on it: read,
+    ///   and treat an empty result as "no data or no access".
+    ///
     /// - Parameter permissions: Set of permission types to request
-    /// - Returns: Dictionary mapping permission types to granted status
+    /// - Returns: Dictionary mapping permission types to HealthKit sharing status
     /// - Throws: SynheartWearError if permissions cannot be requested
     public func requestPermissions(_ permissions: Set<PermissionType>) async throws -> [PermissionType: Bool] {
         try ensureInitialized()
@@ -242,7 +248,10 @@ public class SynheartWear {
 
     /// Get current permission status
     ///
-    /// - Returns: Dictionary mapping permission types to granted status
+    /// - Important: Reports HealthKit's sharing (write) status, not read
+    ///   access, which HealthKit never reveals. See `requestPermissions(_:)`.
+    ///
+    /// - Returns: Dictionary mapping permission types to HealthKit sharing status
     public func getPermissionStatus() -> [PermissionType: Bool] {
         var status: [PermissionType: Bool] = [:]
 

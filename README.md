@@ -32,7 +32,7 @@ Add to your `Package.swift`:
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/synheart-ai/synheart-wear-swift.git", from: "0.2.0")
+    .package(url: "https://github.com/synheart-ai/synheart-wear-swift.git", from: "0.4.3")
 ]
 ```
 
@@ -339,7 +339,19 @@ let status = synheartWear.getPermissionStatus()
 print("HR permission: \(status[.heartRate] ?? false)")
 ```
 
+> **Note**: HealthKit never tells an app whether **read** access was granted.
+> Both maps reflect HealthKit's sharing (write) status, which this SDK never
+> requests, so read-only access reports `false` even when the user allowed
+> reading. Don't gate on them: read, and treat an empty result as "no data or
+> no access".
+
 ### Local Storage
+
+With `enableEncryption: true`, each cached session is sealed with AES-256-GCM
+under a key kept in the Keychain (after first unlock, this device only) and
+written with file protection on iOS and watchOS. Tampered records are dropped,
+and if the key can't be obtained the session is not cached rather than stored
+unencrypted.
 
 ```swift
 // Get cached sessions (last 7 days)

@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.3] - 2026-11-12
+
+### Fixed
+- **Overnight HRV from HealthKit is reported as SDNN.** `HealthKitHistoryReader`
+  put HealthKit's SDNN into `OvernightPhysiologySummary.hrvRmssdMs`, so it
+  could be stored as an RMSSD baseline. It now fills the new `hrvSdnnMs` and
+  leaves `hrvRmssdMs` nil. The existing initializer is unchanged; `hrvSdnnMs`
+  defaults to nil.
+- **The local cache is now encrypted.** `enableEncryption` was accepted but
+  ignored, and sessions were written as plain JSON. Sessions are now sealed
+  with AES-256-GCM (CryptoKit) under a key kept in the Keychain
+  (after-first-unlock, this device only), and written with file protection on
+  iOS and watchOS. A tampered record is dropped instead of returned. If the
+  key can't be obtained, the session is not cached rather than stored
+  unencrypted. Plaintext files left by earlier versions are deleted when
+  encryption is on.
+- **`getCachedSessions` respects the date range before the limit.** It took
+  the first `limit` files in directory order and then filtered, so it could
+  return too few sessions, or not the newest. It now filters, sorts newest
+  first, then applies the limit.
+
 ## [0.4.2] - 2026-11-02
 
 ### Fixed
