@@ -32,7 +32,7 @@ Add to your `Package.swift`:
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/synheart-ai/synheart-wear-swift.git", from: "0.4.3")
+    .package(url: "https://github.com/synheart-ai/synheart-wear-swift.git", from: "0.4.4")
 ]
 ```
 

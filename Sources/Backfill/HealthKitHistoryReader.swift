@@ -8,8 +8,8 @@
 // initializing the full `SynheartWear` machinery.
 //
 // Authorization is the caller's responsibility: request read access
-// to `.heartRate`, `.heartRateVariabilitySDNN`, and `.sleepAnalysis`
-// up-front. The reader's `isAvailable()` returns true when HealthKit
+// to `.heartRate`, `.restingHeartRate`, `.heartRateVariabilitySDNN`, and
+// `.sleepAnalysis` up-front. The reader's `isAvailable()` returns true when HealthKit
 // itself is available; per-type authorization is checked at read time
 // (HealthKit returns empty results without throwing when read access
 // is denied — by design, to avoid leaking presence/absence of data).
@@ -106,6 +106,12 @@ public final class HealthKitHistoryReader: HealthHistoryReader, @unchecked Senda
     // Overnight HR + HRV                                              //
     // ────────────────────────────────────────────────────────────── //
 
+    /// Overnight heart rate and HRV (SDNN) averaged over each night's asleep
+    /// windows, plus the day's resting-heart-rate sample, keyed by local
+    /// wake-day. Resting heart rate comes only from HealthKit's
+    /// `.restingHeartRate`; a day without one has none, and a day with one
+    /// but no sleep still gets an entry. Request read access to
+    /// `.restingHeartRate` along with the other types.
     public func fetchOvernightPhysiology(
         start: Date,
         end: Date,
@@ -113,60 +119,49 @@ public final class HealthKitHistoryReader: HealthHistoryReader, @unchecked Senda
     ) async throws -> [Date: OvernightPhysiologySummary] {
         guard let sleepType = HKObjectType.categoryType(forIdentifier: .sleepAnalysis),
               let hrType = HKQuantityType.quantityType(forIdentifier: .heartRate),
-              let hrvType = HKQuantityType.quantityType(forIdentifier: .heartRateVariabilitySDNN) else {
+              let hrvType = HKQuantityType.quantityType(forIdentifier: .heartRateVariabilitySDNN),
+              let restingType = HKQuantityType.quantityType(forIdentifier: .restingHeartRate) else {
             return [:]
         }
-
-        let sleepSamples = try await categorySamples(type: sleepType, start: start, end: end)
-        if sleepSamples.isEmpty { return [:] }
+        let hrPerMinute = HKUnit.count().unitDivided(by: HKUnit.minute())
+        let ms = HKUnit.secondUnit(with: .milli)
 
         // Restrict to actual-asleep windows (matches Flutter / Kotlin
         // "overnight only" semantic — in-bed-while-awake samples
         // shouldn't pull the average down).
-        let asleepWindows = sleepSamples.filter { sample in
-            switch sample.value {
-            case HKCategoryValueSleepAnalysis.awake.rawValue,
-                 HKCategoryValueSleepAnalysis.inBed.rawValue:
-                return false
-            default:
-                return true
+        let windows = try await categorySamples(type: sleepType, start: start, end: end)
+            .filter { sample in
+                switch sample.value {
+                case HKCategoryValueSleepAnalysis.awake.rawValue,
+                     HKCategoryValueSleepAnalysis.inBed.rawValue:
+                    return false
+                default:
+                    return true
+                }
             }
-        }
-        if asleepWindows.isEmpty { return [:] }
+            .map { SleepWindow(start: $0.startDate, end: $0.endDate) }
 
-        async let hrSamples = quantitySamples(type: hrType, start: start, end: end)
-        async let hrvSamples = quantitySamples(type: hrvType, start: start, end: end)
-        let hrPerMinute = HKUnit.count().unitDivided(by: HKUnit.minute())
-        let ms = HKUnit.secondUnit(with: .milli)
+        let resting: [(Date, Double)] = try await quantitySamples(type: restingType, start: start, end: end)
+            .map { ($0.startDate, $0.quantity.doubleValue(for: hrPerMinute)) }
+        if windows.isEmpty && resting.isEmpty { return [:] }
 
-        let hrPoints: [(Date, Double)] = try await hrSamples.map {
-            ($0.startDate, $0.quantity.doubleValue(for: hrPerMinute))
-        }
-        let hrvPoints: [(Date, Double)] = try await hrvSamples.map {
-            ($0.startDate, $0.quantity.doubleValue(for: ms))
-        }
-
-        var byDay: [Date: (hrSum: Double, hrN: Int, hrvSum: Double, hrvN: Int)] = [:]
-        for window in asleepWindows {
-            let wakeDay = startOfDay(for: window.endDate, in: timeZone)
-            var acc = byDay[wakeDay] ?? (0.0, 0, 0.0, 0)
-            for (t, bpm) in hrPoints where t >= window.startDate && t < window.endDate {
-                acc.hrSum += bpm; acc.hrN += 1
-            }
-            for (t, sdnn) in hrvPoints where t >= window.startDate && t < window.endDate {
-                acc.hrvSum += sdnn; acc.hrvN += 1
-            }
-            byDay[wakeDay] = acc
+        // Without an asleep window there is nothing to average the samples over.
+        var hrPoints: [(Date, Double)] = []
+        var hrvPoints: [(Date, Double)] = []
+        if !windows.isEmpty {
+            async let hrSamples = quantitySamples(type: hrType, start: start, end: end)
+            async let hrvSamples = quantitySamples(type: hrvType, start: start, end: end)
+            hrPoints = try await hrSamples.map { ($0.startDate, $0.quantity.doubleValue(for: hrPerMinute)) }
+            hrvPoints = try await hrvSamples.map { ($0.startDate, $0.quantity.doubleValue(for: ms)) }
         }
 
-        return byDay.mapValues { a in
-            // HealthKit's HRV is SDNN; it must not reach an RMSSD baseline.
-            OvernightPhysiologySummary(
-                hrvRmssdMs: nil,
-                restingHrBpm: a.hrN > 0 ? a.hrSum / Double(a.hrN) : nil,
-                hrvSdnnMs: a.hrvN > 0 ? a.hrvSum / Double(a.hrvN) : nil
-            )
-        }
+        return summarizeOvernight(
+            windows: windows,
+            heartRate: hrPoints,
+            hrvSdnn: hrvPoints,
+            restingHeartRate: resting,
+            timeZone: timeZone
+        )
     }
 
     // ────────────────────────────────────────────────────────────── //

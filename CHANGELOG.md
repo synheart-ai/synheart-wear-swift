@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.4] - 2026-11-17
+
+### Fixed
+- **`OvernightPhysiologySummary.restingHrBpm` is the resting heart rate.**
+  `HealthKitHistoryReader.fetchOvernightPhysiology` put the mean heart rate
+  while asleep there. It now reads HealthKit's `.restingHeartRate` (the day's
+  median when there are several) and is nil on a day without one. The asleep
+  mean moves to the new `overnightHrBpm` field (the initializer's new
+  parameter defaults to nil). A day with a resting-HR sample but no sleep now
+  gets an entry. Request read access to `.restingHeartRate` for it.
+
+### Changed
+- `requestPermissions` asks for `.restingHeartRate` along with `.heartRate`.
+
 ## [0.4.3] - 2026-11-12
 
 ### Fixed
