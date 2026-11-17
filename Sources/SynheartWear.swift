@@ -206,7 +206,12 @@ public class SynheartWear {
             }
 
             let healthKitTypes = permissions.compactMap { $0.toHealthKitType() }
-            let readTypes = Set(healthKitTypes)
+            var readTypes = Set(healthKitTypes)
+            // Resting HR rides with heart rate: the overnight history reads it.
+            if permissions.contains(.heartRate),
+               let resting = HKQuantityType.quantityType(forIdentifier: .restingHeartRate) {
+                readTypes.insert(resting)
+            }
 
             if #available(iOS 15.0, *) {
                 try await healthStore.requestAuthorization(
