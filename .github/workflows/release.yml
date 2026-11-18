@@ -8,13 +8,31 @@ on:
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
+# The optimised build and the tests run in parallel, not one after the other.
 jobs:
-  validate:
-    name: Validate Release
+  build-release:
+    name: Release build
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
       - run: xcodebuild -version
-      - run: swift --version
       - run: swift build -c release
+
+  test:
+    name: Test
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Show toolchain
+        id: toolchain
+        run: |
+          xcodebuild -version
+          echo "xcode=$(xcodebuild -version | head -1 | tr ' ' '-')" >> "$GITHUB_OUTPUT"
+      - name: Restore SwiftPM build
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            .build
+            ~/Library/Caches/org.swift.swiftpm
+          key: spm-${{ runner.os }}-${{ steps.toolchain.outputs.xcode }}-${{ hashFiles('Package.resolved') }}
       - run: swift test
