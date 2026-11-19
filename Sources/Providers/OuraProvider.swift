@@ -53,9 +53,7 @@ public class OuraProvider: WearableProvider {
                 redirectUri: redirectUri,
                 projectId: projectId
             )
-            guard let url = URL(string: resp.authUrl) else {
-                throw SynheartWearError.invalidResponse
-            }
+            let url = try vendorAuthorizationURL(resp.authUrl)
             #if os(iOS)
             await MainActor.run {
                 if UIApplication.shared.canOpenURL(url) {

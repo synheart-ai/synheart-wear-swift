@@ -127,9 +127,7 @@ public class GarminProvider: WearableProvider {
             )
 
             // Open authorization URL in browser
-            guard let url = URL(string: response.authorizationUrl) else {
-                throw SynheartWearError.invalidResponse
-            }
+            let url = try vendorAuthorizationURL(response.authorizationUrl)
 
             #if os(iOS)
             await MainActor.run {
