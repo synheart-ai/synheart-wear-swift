@@ -6,6 +6,11 @@ on:
   pull_request:
     branches: [main, dev]
 
+# A new push to a PR cancels the run it replaces.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
@@ -15,9 +20,23 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
-      - run: xcodebuild -version
-      - run: swift --version
+      - name: Show toolchain
+        id: toolchain
+        run: |
+          xcodebuild -version
+          swift --version
+          echo "xcode=$(xcodebuild -version | head -1 | tr ' ' '-')" >> "$GITHUB_OUTPUT"
       - name: Verify no Garmin overlay symlinks committed
         run: make verify-clean
-      - run: swift build
-      - run: swift test
+      # Compiled dependencies (grpc-swift, SwiftNIO, swift-protobuf) are most
+      # of the build time. Keyed on the toolchain and Package.resolved, so a
+      # new Xcode or a dependency bump starts clean.
+      - name: Cache SwiftPM build
+        uses: actions/cache@v4
+        with:
+          path: |
+            .build
+            ~/Library/Caches/org.swift.swiftpm
+          key: spm-${{ runner.os }}-${{ steps.toolchain.outputs.xcode }}-${{ hashFiles('Package.resolved') }}
+      - name: Build and test
+        run: swift test
