@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.5] - 2026-11-19
+
+### Security
+- **Vendor sign-in pages open only over `https`.** Oura, Fitbit, WHOOP and
+  Garmin `connect()` opened whatever authorization URL the backend returned.
+  A URL that is not absolute `https` (plain `http`, another scheme, a relative
+  path) is now refused as an invalid response instead of opened.
+
 ## [0.4.4] - 2026-11-17
 
 ### Fixed

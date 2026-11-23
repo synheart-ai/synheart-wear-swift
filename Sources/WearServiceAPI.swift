@@ -682,6 +682,23 @@ internal struct VendorOAuthInitiateRequest: Codable {
     }
 }
 
+/// The vendor sign-in page returned by the backend, as a URL the SDK may open.
+///
+/// The page carries the user's sign-in, so only an absolute `https` URL is
+/// accepted; anything else (plain `http`, a custom scheme, a relative path) is
+/// treated as a bad response rather than opened. Parsed through
+/// `URLComponents` so the scheme is checked before a `URL` exists.
+internal func vendorAuthorizationURL(_ string: String) throws -> URL {
+    guard let components = URLComponents(string: string),
+          components.scheme?.lowercased() == "https",
+          let host = components.host, !host.isEmpty,
+          let url = components.url
+    else {
+        throw SynheartWearError.invalidResponse
+    }
+    return url
+}
+
 internal struct VendorOAuthInitiateResponse: Codable {
     let authUrl: String
     let state: String
