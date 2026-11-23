@@ -13,6 +13,9 @@ updates:
     directory: "/"
     patterns: ["*"]
     multi-ecosystem-group: dependency-updates
+    ignore:
+      - dependency-name: "github.com/grpc/grpc-swift"
+        versions: [">= 2.0.0"]
 
   - package-ecosystem: github-actions
     directory: "/"
